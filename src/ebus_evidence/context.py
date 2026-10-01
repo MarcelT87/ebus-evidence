@@ -117,6 +117,12 @@ class ContextCaptureManager:
         while self.buffer and self.buffer[0][0] < cutoff:
             self.buffer.popleft()
 
+    def trigger_event(self, event: dict[str, Any]) -> bool:
+        check = self.context_checks.get(str(event.get("check_id")))
+        if check is None:
+            return False
+        return self.trigger(check, event)
+
     def trigger(self, check: dict[str, Any], event: dict[str, Any]) -> bool:
         context = check.get("context")
         if not isinstance(context, dict) or not context_should_trigger(event, context):
