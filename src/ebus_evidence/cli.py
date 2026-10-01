@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from ebus_evidence import __version__
+from ebus_evidence.bundle import BundleError, create_bundle
 from ebus_evidence.discovery.ebusd import EbusdDiscovery, discover_ebusd
 from ebus_evidence.input.raw_file import (
     RawParseError,
@@ -358,6 +359,40 @@ def _watch(args: argparse.Namespace) -> int:
                 print(f"         sample: {sample}")
     return 0
 
+
+def _bundle(args: argparse.Namespace) -> int:
+    try:
+        profile = load_profile(args.profile)
+    except ProfileError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        result = create_bundle(
+            args.output,
+            profile,
+            state_path=args.state,
+            context_dir=args.context_dir,
+            include_context_raw=not args.no_context_raw,
+        )
+    except BundleError as exc:
+        print(f"error: cannot create evidence bundle: {exc}", file=sys.stderr)
+        return 2
+
+    print("eBUS Evidence bundle")
+    print(f"Profile: {profile['name']} (v{profile.get('version', 1)})")
+    print(f"Output: {result['path']}")
+    print(f"Members: {len(result['members'])}")
+    print(
+        "Contexts: "
+        f"{result['manifest']['context_metadata_count']} metadata, "
+        f"{result['manifest']['context_raw_count']} raw"
+    )
+    print(f"State included: {'yes' if result['manifest']['evidence_state_included'] else 'no'}")
+    print(f"SHA256: {result['sha256']}")
+    print("No absolute paths, resume checkpoint, host metadata or credentials are exported.")
+    return 0
+
 def _add_time_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--source-timezone",
@@ -469,6 +504,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_time_arguments(watch)
     watch.set_defaults(func=_watch)
+
+    bundle = subparsers.add_parser(
+        "bundle",
+        help="create a deterministic shareable ZIP from evidence state/context",
+    )
+    bundle.add_argument(
+        "--profile",
+        required=True,
+        help="profile path or bundled profile name, e.g. hw5103-open-evidence",
+    )
+    bundle.add_argument(
+        "--state",
+        help="optional existing evidence state JSON to include without resume metadata",
+    )
+    bundle.add_argument(
+        "--context-dir",
+        help="optional directory containing context JSON/raw pairs",
+    )
+    bundle.add_argument(
+        "--no-context-raw",
+        action="store_true",
+        help="include context metadata only, without the raw context files",
+    )
+    bundle.add_argument(
+        "--output",
+        required=True,
+        help="output ZIP path",
+    )
+    bundle.set_defaults(func=_bundle)
 
     return parser
 
