@@ -1,71 +1,43 @@
 # ebusd setups
 
-`ebus-evidence` deliberately does **not** support eBUS adapters directly.
-
-Its supported boundary is much simpler:
+`ebus-evidence` has one deliberately simple compatibility boundary:
 
 ```text
-eBUS adapter
+eBUS hardware
     ↓
-normal ebusd
+ebusd
     ↓
 message-mode raw log
     ↓
 ebus-evidence
 ```
 
-If your adapter already works with normal ebusd, its connection type usually does not matter to `ebus-evidence`.
+**How ebusd is connected to the eBUS hardware is outside the scope of this project.**
+
+If your existing ebusd installation works and can write a message-mode raw log, you normally do not need to change its adapter configuration for `ebus-evidence`.
 
 ---
 
-## What ebus-evidence actually supports
+## Supported data sources
 
 | Data source | Status |
 |---|---|
-| Normal ebusd in Docker with a readable message-mode raw log | **Supported** |
-| Normal ebusd on native/systemd Linux with a readable message-mode raw log | **Supported** |
-| Existing normal ebusd message-mode raw-log file | **Supported** |
-| Normal ebusd on another host, with the raw log copied or mounted read-only | **Supported for offline/file-based use** |
-| Direct adapter access | **Intentionally not supported** |
+| ebusd in Docker with a readable message-mode raw log | **Supported** |
+| ebusd on native/systemd Linux with a readable message-mode raw log | **Supported** |
+| Existing ebusd message-mode raw-log file | **Supported** |
+| ebusd on another host, with the raw log copied or mounted read-only | **Supported for file-based/offline use** |
+| Direct eBUS adapter access | **Intentionally not supported** |
 | ebusd byte-mode raw log | **Not supported** |
 
-That is the compatibility model.
-
----
-
-## Adapter connection type is ebusd's job
-
-Normal ebusd can use different adapter transports, for example:
-
-- serial / USB;
-- network connections;
-- UDP;
-- enhanced modes such as `ens:` and `enh:`;
-- mDNS discovery.
-
-Those are **ebusd configuration details**.
-
-`ebus-evidence` does not need a separate implementation for each one.
-
-For example, these all lead to the same evidence input:
-
-```text
-USB adapter ───────────────┐
-TCP/network adapter ───────┤
-UDP adapter ───────────────┤
-ens:/enh: adapter ─────────┼─> normal ebusd -> message-mode raw log -> ebus-evidence
-mDNS-discovered adapter ───┘
-```
-
-So there is no separate "USB parser", "TCP parser", or "mDNS parser" in this project.
+There are no separate adapter-specific parsers in `ebus-evidence`.
 
 ---
 
 ## Docker ebusd
 
-With Docker, the important part is that the raw-log directory is mounted to the host.
+For Docker, the important part is that the raw log is available on the Docker host.
 
-Example:
+Example Compose fragment:
 
 ```yaml
 services:
@@ -78,19 +50,29 @@ services:
       - /srv/ebusd/rawlog:/rawlog
 ```
 
-Then the host can see:
+This example maps:
 
 ```text
-/srv/ebusd/rawlog/ebusd.raw
+container: /rawlog/ebusd.raw
+host:      /srv/ebusd/rawlog/ebusd.raw
 ```
 
-and `ebus-evidence` can either discover it automatically or use it explicitly:
+The host path is only an example. Use a path appropriate for your installation.
+
+Check:
+
+```bash
+ls -lh /srv/ebusd/rawlog/
+head -n 5 /srv/ebusd/rawlog/ebusd.raw
+```
+
+Then try automatic discovery:
 
 ```bash
 ebus-evidence doctor
 ```
 
-or:
+If automatic discovery does not fit the installation, use the host path directly:
 
 ```bash
 ebus-evidence doctor \
@@ -98,15 +80,19 @@ ebus-evidence doctor \
   --profile hw5103-open-evidence
 ```
 
-The adapter may be USB, network-connected, or otherwise supported by ebusd. That does not change the `ebus-evidence` workflow.
+### Why the host mount matters
+
+A raw log that exists only inside a disposable container can disappear when that container is replaced.
+
+A host-mounted directory keeps the log independently of the container lifecycle and lets `ebus-evidence` read it directly.
 
 ---
 
 ## Native/systemd ebusd
 
-With a native Linux ebusd installation, the important part is the local message-mode raw-log file.
+For a native Linux installation, the important part is a readable local message-mode raw log.
 
-Typical ebusd options are:
+Typical ebusd raw-log options are:
 
 ```text
 --lograwdata
@@ -120,13 +106,20 @@ Do not use byte mode:
 --lograwdata=bytes
 ```
 
+After restarting your existing ebusd service, check:
+
+```bash
+ls -lh /var/log/ebusd.raw*
+head -n 5 /var/log/ebusd.raw
+```
+
 Then:
 
 ```bash
 ebus-evidence doctor
 ```
 
-or:
+or explicitly:
 
 ```bash
 ebus-evidence doctor \
@@ -134,64 +127,44 @@ ebus-evidence doctor \
   --profile hw5103-open-evidence
 ```
 
-Again, the adapter transport itself is handled by ebusd.
+Where ebusd startup options are configured depends on how ebusd was installed. Do not replace an existing service configuration blindly; add only the required raw-log options to the existing setup.
 
 ---
 
 ## ebusd on another computer
 
-If normal ebusd runs elsewhere, the current simple options are:
+The current simple approaches are:
 
-1. copy the raw log and analyze it locally; or
-2. make the raw-log directory available through a read-only filesystem mount.
+1. copy the message-mode raw log to the analysis computer; or
+2. make the raw-log directory available through a secure read-only filesystem mount.
 
-Example:
+Then use the file explicitly:
 
 ```bash
 ebus-evidence analyze \
-  --raw /path/to/copied-ebusd.raw \
+  --raw /path/to/ebusd.raw \
   --profile hw5103-open-evidence
 ```
 
-Direct remote streaming from the ebusd client interface is not currently needed for the core workflow.
+Remote streaming is not required for the current evidence workflow.
 
 ---
 
-## TCP: one important distinction
+## Message mode is required
 
-There are two different things people often call "TCP".
-
-### ebusd talking to an adapter
+The supported common input is:
 
 ```text
-normal ebusd -> network/TCP-style adapter connection -> eBUS adapter
+ebusd message-mode raw log
 ```
 
-This is an ebusd hardware/transport configuration.
-
-It does not require special support in `ebus-evidence`.
-
-### A client talking to ebusd
+A record looks roughly like:
 
 ```text
-ebusctl -> ebusd client port
+2026-10-01 10:00:00.000 <1008b507020900...
 ```
 
-The ebusd client interface is a different connection.
-
-`ebus-evidence` does not currently use it as the primary evidence source because the message-mode raw-log file is the common, reproducible input.
-
----
-
-## Message mode is the common boundary
-
-The current supported input is:
-
-```text
-normal ebusd message-mode raw log
-```
-
-Use normal ebusd raw logging:
+Use normal raw logging:
 
 ```text
 --lograwdata
@@ -203,55 +176,42 @@ Do not use:
 --lograwdata=bytes
 ```
 
-A typical message-mode record looks roughly like:
-
-```text
-2026-10-01 10:00:00.000 <1008b507020900...
-```
+Byte mode is a different input format and is intentionally outside the current parser scope.
 
 ---
 
-## What automatic discovery means
+## What automatic discovery does
 
-Automatic discovery only tries to find the normal ebusd process/container and its raw-log path.
+Automatic discovery tries to locate:
 
-For Docker it can use:
+- a running ebusd Docker container or native/systemd service;
+- the configured raw-log mode;
+- the raw-log path;
+- for Docker, the host path when the raw directory is mounted.
 
-- container/process information;
-- Docker mount metadata.
+It does **not** discover, configure or control the eBUS adapter.
 
-For native/systemd it can use:
-
-- service/process information;
-- the running ebusd command line.
-
-It does **not** discover or control the eBUS adapter itself.
-
-If discovery does not fit an unusual installation, use:
-
-```bash
---raw /path/to/ebusd.raw
-```
+If discovery cannot describe an unusual installation, `--raw /path/to/ebusd.raw` remains the simple fallback.
 
 ---
 
-## The rule to remember
+## Rule to remember
 
-Do not change a working ebusd adapter setup just for `ebus-evidence`.
+Do not redesign a working ebusd installation for `ebus-evidence`.
 
-The preferred flow is:
+Use:
 
 ```text
-working normal ebusd
-        ↓
+working ebusd
+     ↓
 enable or locate message-mode raw log
-        ↓
+     ↓
 ebus-evidence doctor
-        ↓
+     ↓
 ebus-evidence analyze
 ```
 
-If normal ebusd can see the bus and write the expected raw log, `ebus-evidence` generally does not care whether the adapter is connected by USB, network, UDP, `ens:`, `enh:`, or mDNS.
+That is the intended integration point.
 
 ---
 
