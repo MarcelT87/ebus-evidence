@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from ebus_evidence.profiles.loader import load_profile
-from ebus_evidence.watch import RawLogFollower, frame_events
+from ebus_evidence.watch import RawLogFollower, frame_events, run_watch
 from ebus_evidence.input.raw_file import parse_record
 
 
@@ -28,9 +28,10 @@ def test_follower_reads_only_new_records_by_default(tmp_path):
     assert len(records) == 1
     assert b"10:00:01.000" in records[0]
 
-    final = follower.finish()
-    assert len(final) == 1
-    assert b"10:00:02.000" in final[0]
+    final, tail = follower.finish()
+    assert final == []
+    assert tail is not None
+    assert b"10:00:02.000" in tail
 
 
 def test_follower_survives_rename_create_rotation(tmp_path):
@@ -57,9 +58,10 @@ def test_follower_survives_rename_create_rotation(tmp_path):
     assert b"10:00:01.000" in records[0]
     assert b"10:00:02.000" in records[1]
 
-    final = follower.finish()
-    assert len(final) == 1
-    assert b"10:00:03.000" in final[0]
+    final, tail = follower.finish()
+    assert final == []
+    assert tail is not None
+    assert b"10:00:03.000" in tail
 
 
 def test_watch_event_decodes_profile_value():
@@ -81,3 +83,36 @@ def test_watch_event_decodes_profile_value():
     assert event["value_status"] == "decoded"
     assert event["value"] == 32
     assert event["timestamp"]["display"] == "2026-10-01T12:00:00.000+02:00"
+
+
+def test_watch_tracks_completed_unparseable_records_by_reason(tmp_path, monkeypatch):
+    path = tmp_path / "ebusd.raw"
+    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    calls = {"count": 0}
+
+    def fake_sleep(_seconds):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            with path.open("ab") as handle:
+                handle.write(b"2026-10-01 10:00:01.000 <aa\n")
+                handle.write(_record("2026-10-01 10:00:02.000"))
+
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
+    stats = run_watch(path, {"name": "none", "version": 1, "checks": []}, seconds=0.01)
+
+    assert stats.skipped_records == 1
+    assert stats.skip_reasons["master telegram is too short"] == 1
+
+
+def test_unfinished_tail_is_not_counted_as_skipped(tmp_path):
+    path = tmp_path / "ebusd.raw"
+    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    follower = RawLogFollower(path)
+    follower.start()
+    with path.open("ab") as handle:
+        handle.write(b"2026-10-01 10:00:01.000 <f108")
+
+    _, tail = follower.finish()
+    assert tail is not None

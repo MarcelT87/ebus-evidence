@@ -287,8 +287,13 @@ def _watch(args: argparse.Namespace) -> int:
     print()
     print(
         f"Watch summary: frames={stats.frames} matches={stats.matches} "
-        f"parse_errors={stats.parse_errors} rotations={stats.rotations}"
+        f"skipped={stats.skipped_records} partial_tail={stats.partial_tail} "
+        f"rotations={stats.rotations}"
     )
+    if stats.skip_reasons:
+        print("Skipped record reasons:")
+        for reason, count in stats.skip_reasons.most_common():
+            print(f"  {count:>5}  {reason}")
     return 0
 
 def _add_time_arguments(parser: argparse.ArgumentParser) -> None:

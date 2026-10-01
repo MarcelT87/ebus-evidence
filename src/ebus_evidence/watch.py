@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, BinaryIO, Iterator
+from typing import Any, BinaryIO
 
 from ebus_evidence.decoders import DecodeError, decode_value
 from ebus_evidence.input.raw_file import RawParseError, parse_record, split_record_buffer
@@ -18,8 +19,10 @@ from ebus_evidence.timeutil import normalize_timestamp
 class WatchStats:
     frames: int = 0
     matches: int = 0
-    parse_errors: int = 0
+    skipped_records: int = 0
+    partial_tail: int = 0
     rotations: int = 0
+    skip_reasons: Counter[str] = field(default_factory=Counter)
 
 
 class RawLogFollower:
@@ -67,7 +70,8 @@ class RawLogFollower:
 
         current_inode = (path_stat.st_dev, path_stat.st_ino)
         if current_inode != self._inode:
-            # Drain and close the renamed old file before opening the new active file.
+            # The renamed file is no longer being written by ebusd, so its tail
+            # is safe to flush before the new active file is opened.
             records.extend(self._consume_bytes(self._read_available(), flush=True))
             self._handle.close()
             self._handle = None
@@ -86,13 +90,17 @@ class RawLogFollower:
 
         return records
 
-    def finish(self) -> list[bytes]:
+    def finish(self) -> tuple[list[bytes], bytes | None]:
+        """Close the active file without assuming its final tail is complete."""
         if self._handle is None:
-            return []
-        records = self._consume_bytes(self._read_available(), flush=True)
+            return [], None
+
+        records = self._consume_bytes(self._read_available())
+        tail = self._buffer.strip() or None
+        self._buffer = b""
         self._handle.close()
         self._handle = None
-        return records
+        return records, tail
 
 
 def frame_events(
@@ -179,8 +187,9 @@ def run_watch(
         for record in records:
             try:
                 frame = parse_record(record)
-            except RawParseError:
-                stats.parse_errors += 1
+            except RawParseError as exc:
+                stats.skipped_records += 1
+                stats.skip_reasons[str(exc)] += 1
                 continue
             stats.frames += 1
             for event in frame_events(
@@ -202,7 +211,28 @@ def run_watch(
     except KeyboardInterrupt:
         pass
     finally:
-        consume(follower.finish())
+        records, tail = follower.finish()
+        consume(records)
+        if tail is not None:
+            try:
+                frame = parse_record(tail)
+            except RawParseError:
+                # The active raw log can be stopped between two writes. Do not
+                # label that unfinished final record as a parser failure.
+                stats.partial_tail += 1
+            else:
+                stats.frames += 1
+                for event in frame_events(
+                    frame,
+                    profile,
+                    source_timezone=source_timezone,
+                    display_timezone=display_timezone,
+                ):
+                    stats.matches += 1
+                    if json_lines:
+                        print(json.dumps(event, sort_keys=True), flush=True)
+                    else:
+                        print(format_event(event), flush=True)
         stats.rotations = follower.rotations
 
     return stats

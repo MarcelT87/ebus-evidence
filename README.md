@@ -248,7 +248,7 @@ ebus-evidence watch \
   --seconds 15
 ```
 
-`watch` does not create a database and does not access the eBUS adapter. It only follows the already configured raw-log file.
+`watch` does not create a database and does not access the eBUS adapter. It only follows the already configured raw-log file. Completed raw records that cannot be parsed are counted as `skipped` with their reason; an unfinished final record present exactly when the watch stops is reported separately as `partial_tail` rather than as a parser error.
 
 ## Raw logging
 
