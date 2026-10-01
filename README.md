@@ -55,34 +55,25 @@ If something fails during installation, discovery, raw logging, watch/resume, bu
 
 ## Which setups are supported?
 
-| Setup | Current status |
+The compatibility boundary is intentionally simple:
+
+| Data source | Current status |
 |---|---|
-| Normal ebusd in Docker | **Supported and real-world validated** |
-| Normal ebusd via systemd/native Linux | **Supported; more independent real-world validation wanted** |
-| USB/serial adapter used by normal ebusd | **Supported** — adapter transport does not change the raw-log workflow |
-| TCP/UDP/`ens:`/`enh:`/mDNS adapter used by normal ebusd | **Supported in principle** — ebus-evidence reads the ebusd raw log, not the adapter |
-| Normal ebusd on another computer | **Offline supported** via copied/read-only mounted raw log |
-| Live remote following without a filesystem mount | **Not implemented yet** |
-| micro-ebusd running directly on an ESP32 adapter | **Not yet validated/supported as an input format** |
-| ebusd `--lograwdata=bytes` | **Not supported**; use normal message mode |
+| Normal ebusd in Docker + readable message-mode raw log | **Supported and real-world validated** |
+| Normal ebusd via native/systemd Linux + readable message-mode raw log | **Supported; more independent validation wanted** |
+| Existing normal ebusd message-mode raw-log file | **Supported** |
+| Normal ebusd on another computer | **Offline/file-based use supported** |
+| micro-ebusd output | **Not yet validated** |
+| Direct adapter access | **Intentionally not supported** |
+| ebusd `--lograwdata=bytes` | **Not supported** |
 
-### Important: TCP can mean two different things
-
-This is supported in principle:
+The adapter connection itself is ebusd's job. USB, serial, network/TCP, UDP, `ens:`, `enh:` or mDNS do **not** require separate implementations in `ebus-evidence`.
 
 ```text
-ebusd -> TCP/ens -> eBUS adapter
+adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
 ```
 
-because normal ebusd can still write the message-mode raw log that `ebus-evidence` reads.
-
-This is a different interface:
-
-```text
-ebusctl -> ebusd client TCP port (commonly 8888)
-```
-
-`ebus-evidence` does not currently use the ebusd client TCP port as its evidence stream.
+See **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** for the distinction between ebusd installation type, adapter transport and micro-ebusd.
 
 ## 5-minute quick start
 
