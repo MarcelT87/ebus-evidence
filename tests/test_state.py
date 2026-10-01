@@ -74,3 +74,32 @@ def test_state_rejects_different_profile_name(tmp_path):
     incompatible["name"] = "other-profile"
     with pytest.raises(StateError, match="profile mismatch"):
         load_state(path, incompatible)
+
+
+def test_state_checkpoint_persists_and_can_be_cleared(tmp_path):
+    path = tmp_path / "state.json"
+    store = EvidenceStateStore.open(path, PROFILE)
+
+    checkpoint = {"device": 11, "inode": 22, "offset": 333}
+    assert store.set_checkpoint(checkpoint) is True
+
+    reloaded = EvidenceStateStore.open(path, PROFILE)
+    assert reloaded.checkpoint == checkpoint
+
+    reloaded.clear_checkpoint(reason="test reset")
+    again = EvidenceStateStore.open(path, PROFILE)
+    assert again.checkpoint is None
+    assert len(again.state["continuity"]["resets"]) == 1
+    assert again.state["continuity"]["resets"][0]["reason"] == "test reset"
+
+
+def test_old_state_without_checkpoint_is_backward_compatible(tmp_path):
+    path = tmp_path / "state.json"
+    state = new_state(PROFILE)
+    state.pop("checkpoint")
+    state.pop("continuity")
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    loaded = load_state(path, PROFILE)
+    assert loaded["checkpoint"] is None
+    assert loaded["continuity"]["resets"] == []
