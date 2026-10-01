@@ -26,10 +26,25 @@ If your existing ebusd installation works and can write a message-mode raw log, 
 | ebusd on native/systemd Linux with a readable message-mode raw log | **Supported** |
 | Existing ebusd message-mode raw-log file | **Supported** |
 | ebusd on another host, with the raw log copied or mounted read-only | **Supported for file-based/offline use** |
+| Home Assistant OS with an eBUSd App/Add-on | **Supported through a copied/readable raw-log file; run ebus-evidence elsewhere for now** |
 | Direct eBUS adapter access | **Intentionally not supported** |
 | ebusd byte-mode raw log | **Not supported** |
 
 There are no separate adapter-specific parsers in `ebus-evidence`.
+
+---
+
+## Home Assistant OS
+
+If ebusd runs as a Home Assistant eBUSd App/Add-on, treat Home Assistant OS as an appliance rather than a normal Linux host for this project.
+
+The beginner workflow is:
+
+```text
+eBUSd App -> message-mode raw log -> copy/read file -> ebus-evidence on another computer
+```
+
+See [Home Assistant](HOME_ASSISTANT.md) for the current step-by-step path.
 
 ---
 
@@ -218,6 +233,7 @@ That is the intended integration point.
 ## Related documentation
 
 - [Installation and first run](INSTALL.md)
+- [Home Assistant](HOME_ASSISTANT.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Community cross-installation test](COMMUNITY_TEST.md)
 
