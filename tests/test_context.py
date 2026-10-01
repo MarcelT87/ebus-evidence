@@ -143,3 +143,22 @@ def test_watch_integration_captures_real_ba08_nonzero(tmp_path, monkeypatch):
     assert metadata["check_id"] == "hmu_ba08_variants"
     assert metadata["triggers"][0]["value"] == 32
     assert metadata["post_window_complete"] is False
+
+
+def test_context_bundle_does_not_overwrite_existing_same_trigger(tmp_path):
+    manager = ContextCaptureManager(tmp_path, _profile())
+    manager.observe(_record("2026-10-01 10:00:00.000"))
+    manager.observe(_record("2026-10-01 10:00:01.000"))
+    manager.observe(_record("2026-10-01 10:00:02.000"))
+    manager.trigger_event(_event("2026-10-01 10:00:02.000", 32))
+    manager.finish()
+
+    manager2 = ContextCaptureManager(tmp_path, _profile())
+    manager2.observe(_record("2026-10-01 10:00:00.000"))
+    manager2.observe(_record("2026-10-01 10:00:01.000"))
+    manager2.observe(_record("2026-10-01 10:00:02.000"))
+    manager2.trigger_event(_event("2026-10-01 10:00:02.000", 32))
+    manager2.finish()
+
+    assert len(list(tmp_path.glob("*.raw"))) == 2
+    assert len(list(tmp_path.glob("*.json"))) == 2
