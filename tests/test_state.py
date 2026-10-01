@@ -80,7 +80,13 @@ def test_state_checkpoint_persists_and_can_be_cleared(tmp_path):
     path = tmp_path / "state.json"
     store = EvidenceStateStore.open(path, PROFILE)
 
-    checkpoint = {"device": 11, "inode": 22, "offset": 333}
+    checkpoint = {
+        "device": 11,
+        "inode": 22,
+        "offset": 333,
+        "anchor_start": 77,
+        "anchor_sha256": "a" * 64,
+    }
     assert store.set_checkpoint(checkpoint) is True
 
     reloaded = EvidenceStateStore.open(path, PROFILE)
@@ -103,3 +109,13 @@ def test_old_state_without_checkpoint_is_backward_compatible(tmp_path):
     loaded = load_state(path, PROFILE)
     assert loaded["checkpoint"] is None
     assert loaded["continuity"]["resets"] == []
+
+
+def test_legacy_checkpoint_without_anchor_is_still_accepted(tmp_path):
+    path = tmp_path / "state.json"
+    state = new_state(PROFILE)
+    state["checkpoint"] = {"device": 1, "inode": 2, "offset": 3}
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    loaded = load_state(path, PROFILE)
+    assert loaded["checkpoint"] == {"device": 1, "inode": 2, "offset": 3}
