@@ -275,6 +275,17 @@ ebus-evidence watch \
 
 The reset is recorded in the state as a continuity reset.
 
+To avoid excessive filesystem writes during long-running observation, state changes are staged in memory and written atomically at most every 5 seconds by default, plus a forced flush on a clean shutdown. Evidence aggregates and the matching raw-log checkpoint are flushed together. After an abrupt process or host failure, the next run may therefore replay the last not-yet-flushed interval, but the persisted aggregate/checkpoint pair remains internally consistent.
+
+The interval can be changed when needed:
+
+```bash
+ebus-evidence watch \
+  --profile hw5103-open-evidence \
+  --state evidence-state.json \
+  --state-flush-interval 10
+```
+
 A state file is intentionally optional in the current preview. Without `--state`, watch remains stateless and starts at the current end on every run.
 
 ## Raw logging
