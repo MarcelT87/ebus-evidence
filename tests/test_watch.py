@@ -231,21 +231,39 @@ def test_follower_resumes_from_rotated_file_then_switches_to_active(tmp_path):
     assert b"10:00:03.000" in records[2]
 
 
-def test_follower_rejects_checkpoint_after_history_is_lost(tmp_path):
+def test_follower_rejects_checkpoint_when_content_changes_with_same_inode(tmp_path):
     path = tmp_path / "ebusd.raw"
-    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+    original = _record("2026-10-01 10:00:00.000")
+    replacement = _record("2026-10-01 11:00:00.000")
+    assert len(original) == len(replacement)
+    path.write_bytes(original)
 
     initial = RawLogFollower(path)
     initial.start()
     checkpoint = initial.checkpoint()
     initial.finish()
 
-    # Simulate enough replacement/rotation that neither active nor .old is the
-    # file identified by the saved checkpoint.
-    path.unlink()
-    path.write_bytes(_record("2026-10-01 11:00:00.000"))
-    (tmp_path / "ebusd.raw.old").write_bytes(_record("2026-10-01 10:59:00.000"))
+    # Rewrite in place: device/inode and file length stay valid, but the
+    # checkpoint's content anchor must prove this is no longer the same history.
+    before = path.stat()
+    path.write_bytes(replacement)
+    after = path.stat()
+    assert (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino)
 
     resumed = RawLogFollower(path, checkpoint=checkpoint)
     with pytest.raises(ResumeError, match="no longer matches"):
         resumed.start()
+
+
+def test_checkpoint_contains_content_anchor(tmp_path):
+    path = tmp_path / "ebusd.raw"
+    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    follower = RawLogFollower(path)
+    follower.start()
+    checkpoint = follower.checkpoint()
+    follower.finish()
+
+    assert checkpoint["offset"] == path.stat().st_size
+    assert 0 <= checkpoint["anchor_start"] <= checkpoint["offset"]
+    assert len(checkpoint["anchor_sha256"]) == 64
