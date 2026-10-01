@@ -45,6 +45,10 @@ It covers:
 - bundle creation and verification;
 - what to do if you do not know which setup you have.
 
+For a detailed explanation of Docker/native ebusd, USB/network adapters, `ens:`/`enh:`, mDNS, remote hosts and the difference between adapter TCP and the ebusd client port, see:
+
+**[ebusd setup matrix](docs/EBUSD_SETUPS.md)**
+
 ## Which setups are supported?
 
 | Setup | Current status |
