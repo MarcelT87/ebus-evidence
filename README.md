@@ -451,6 +451,12 @@ Once the offline core is stable:
 The raw-log analyzer remains the common core for all installation types.
 
 
+## Validation and community testing
+
+The current real-system validation snapshot is documented in [docs/VALIDATION_2026-10-01.md](docs/VALIDATION_2026-10-01.md).
+
+A minimal passive cross-installation workflow is documented in [docs/COMMUNITY_TEST.md](docs/COMMUNITY_TEST.md).
+
 ## License
 
 `ebus-evidence` is released under the MIT License. See [LICENSE](LICENSE).
