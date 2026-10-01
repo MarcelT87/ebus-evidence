@@ -298,9 +298,15 @@ def _watch(args: argparse.Namespace) -> int:
     print()
     print(
         f"Watch summary: frames={stats.frames} matches={stats.matches} "
-        f"skipped={stats.skipped_records} partial_tail={stats.partial_tail} "
-        f"rotations={stats.rotations}"
+        f"non_frames={stats.non_frame_records} skipped={stats.skipped_records} "
+        f"partial_tail={stats.partial_tail} rotations={stats.rotations}"
     )
+    if stats.non_frame_kinds:
+        print("Non-frame records:")
+        for kind, count in stats.non_frame_kinds.most_common():
+            print(f"  {count:>5}  {kind}")
+            for sample in stats.non_frame_samples.get(kind, []):
+                print(f"         sample: {sample}")
     if stats.skip_reasons:
         print("Skipped record reasons:")
         for reason, count in stats.skip_reasons.most_common():
