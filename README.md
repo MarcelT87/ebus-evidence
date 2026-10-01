@@ -63,7 +63,6 @@ The compatibility boundary is intentionally simple:
 | Normal ebusd via native/systemd Linux + readable message-mode raw log | **Supported; more independent validation wanted** |
 | Existing normal ebusd message-mode raw-log file | **Supported** |
 | Normal ebusd on another computer | **Offline/file-based use supported** |
-| micro-ebusd output | **Not yet validated** |
 | Direct adapter access | **Intentionally not supported** |
 | ebusd `--lograwdata=bytes` | **Not supported** |
 
@@ -73,7 +72,7 @@ The adapter connection itself is ebusd's job. USB, serial, network/TCP, UDP, `en
 adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
 ```
 
-See **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** for the distinction between ebusd installation type, adapter transport and micro-ebusd.
+See **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** for the distinction between ebusd installation type, adapter transport and raw-log access.
 
 ## 5-minute quick start
 
