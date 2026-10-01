@@ -40,13 +40,7 @@ Copy the raw log to the computer running `ebus-evidence`, or make it available t
 
 Automatic live following over the network is not implemented yet.
 
-### D. micro-ebusd runs directly on the ESP32 adapter
-
-Do not assume compatibility yet.
-
-micro-ebusd is a separate execution mode on supported ESP32 adapters. Its downloadable/raw log format has not yet been validated against the normal ebusd message-mode format used by this project.
-
-### E. I do not know
+### D. I do not know
 
 On Linux, try:
 
@@ -449,7 +443,6 @@ ebus-evidence --version
 
 Currently not considered a validated input path:
 
-- micro-ebusd downloadable/raw logs;
 - ebusd byte-mode raw logging;
 - direct eBUS adapter access;
 - automatic live streaming from an ebusd host over the network;
