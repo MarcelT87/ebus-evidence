@@ -37,3 +37,10 @@ def test_watch_accepts_state_path():
         ]
     )
     assert args.state == "/tmp/evidence-state.json"
+
+
+def test_watch_state_defaults_to_none():
+    args = build_parser().parse_args(
+        ["watch", "--profile", "hw5103-open-evidence"]
+    )
+    assert args.state is None

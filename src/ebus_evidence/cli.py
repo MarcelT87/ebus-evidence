@@ -269,6 +269,15 @@ def _watch(args: argparse.Namespace) -> int:
         print(f"Timestamps: raw source={args.source_timezone}, display={display}")
     else:
         print("Timestamps: raw values, timezone unspecified")
+
+    state_store = None
+    if args.state:
+        try:
+            state_store = EvidenceStateStore.open(args.state, profile)
+        except StateError as exc:
+            print(f"error: cannot open evidence state: {exc}", file=sys.stderr)
+            return 2
+        print(f"State: {args.state} ({state_store.total_events} existing events)")
     print()
 
     try:
