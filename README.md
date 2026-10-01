@@ -368,6 +368,16 @@ ebus-evidence bundle \
 
 Bundle creation is deterministic: member ordering, JSON/YAML serialization and ZIP timestamps are fixed. The same inputs therefore produce the same archive bytes and SHA-256 on the same implementation.
 
+A received bundle can be verified without extracting it:
+
+```bash
+ebus-evidence verify hw5103-evidence.zip
+```
+
+Verification checks the ZIP member paths, duplicate names, SHA-256 checksums, manifest/profile/state/context consistency, forbidden local resume fields and context raw references. Corrupt or tampered bundles return `INVALID` with a reason.
+
+The verifier also reports whether the ZIP still has the canonical deterministic layout. A manually repacked archive can remain content-valid while reporting `Deterministic layout: no`.
+
 The bundle contains only selected evidence material. It never embeds the complete long-running ebusd raw log.
 
 ## Raw logging
