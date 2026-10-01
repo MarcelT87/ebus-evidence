@@ -248,7 +248,7 @@ ebus-evidence watch \
   --seconds 15
 ```
 
-`watch` does not create a database and does not access the eBUS adapter. It only follows the already configured raw-log file. Completed raw records that cannot be parsed are counted as `skipped` with their reason. For diagnostics, watch also prints at most three short raw-record samples per skip reason; this is intentionally bounded and is not persisted in the evidence state. An unfinished final record present exactly when the watch stops is reported separately as `partial_tail` rather than as a parser error.
+`watch` does not create a database and does not access the eBUS adapter. It only follows the already configured raw-log file. ebusd message-mode logging can also emit short bus fragments when its raw-message buffer is flushed at synchronization boundaries. These are classified as `non_frames`, not parser failures. For example, `0x00` is the eBUS ACK symbol; other short fragments are kept only as bounded diagnostics and are not treated as complete telegrams. Truly malformed completed records remain `skipped` with their reason. Watch prints at most three short samples per category/reason, and none of these diagnostics are persisted in the evidence state. An unfinished final record present exactly when the watch stops is reported separately as `partial_tail`.
 
 ### Compact persistent evidence state
 
