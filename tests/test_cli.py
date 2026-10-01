@@ -136,3 +136,10 @@ def test_bundle_can_disable_context_raw():
         ]
     )
     assert args.no_context_raw is True
+
+
+def test_verify_accepts_bundle_path():
+    args = build_parser().parse_args(
+        ["verify", "/tmp/evidence.zip"]
+    )
+    assert args.bundle == "/tmp/evidence.zip"
