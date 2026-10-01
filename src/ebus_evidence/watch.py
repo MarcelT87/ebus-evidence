@@ -13,6 +13,7 @@ from ebus_evidence.input.raw_file import RawParseError, parse_record, split_reco
 from ebus_evidence.matching import frame_matches
 from ebus_evidence.models import Frame
 from ebus_evidence.timeutil import normalize_timestamp
+from ebus_evidence.state import EvidenceStateStore
 
 
 @dataclass(slots=True)
@@ -177,6 +178,7 @@ def run_watch(
     seconds: float | None = None,
     poll_interval: float = 0.25,
     json_lines: bool = False,
+    state_store: EvidenceStateStore | None = None,
 ) -> WatchStats:
     follower = RawLogFollower(raw_path)
     follower.start()
@@ -199,6 +201,8 @@ def run_watch(
                 display_timezone=display_timezone,
             ):
                 stats.matches += 1
+                if state_store is not None:
+                    state_store.add(event)
                 if json_lines:
                     print(json.dumps(event, sort_keys=True), flush=True)
                 else:
@@ -229,6 +233,8 @@ def run_watch(
                     display_timezone=display_timezone,
                 ):
                     stats.matches += 1
+                    if state_store is not None:
+                        state_store.add(event)
                     if json_lines:
                         print(json.dumps(event, sort_keys=True), flush=True)
                     else:

@@ -17,6 +17,7 @@ from ebus_evidence.input.raw_file import (
 from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.report import analyze_frames, format_text
 from ebus_evidence.timeutil import TimezoneError, get_timezone
+from ebus_evidence.state import EvidenceStateStore, StateError
 from ebus_evidence.watch import run_watch
 
 
@@ -279,8 +280,9 @@ def _watch(args: argparse.Namespace) -> int:
             seconds=args.seconds,
             poll_interval=args.poll_interval,
             json_lines=args.json_lines,
+            state_store=state_store,
         )
-    except OSError as exc:
+    except (OSError, StateError) as exc:
         print(f"error: cannot watch raw log: {exc}", file=sys.stderr)
         return 2
 
@@ -385,6 +387,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--json-lines",
         action="store_true",
         help="emit one JSON object per matching event",
+    )
+    watch.add_argument(
+        "--state",
+        help="optional compact JSON evidence state persisted across watch runs",
     )
     _add_time_arguments(watch)
     watch.set_defaults(func=_watch)

@@ -250,6 +250,20 @@ ebus-evidence watch \
 
 `watch` does not create a database and does not access the eBUS adapter. It only follows the already configured raw-log file. Completed raw records that cannot be parsed are counted as `skipped` with their reason; an unfinished final record present exactly when the watch stops is reported separately as `partial_tail` rather than as a parser error.
 
+### Compact persistent evidence state
+
+For long-running observation, `watch` can optionally keep a small JSON state:
+
+```bash
+ebus-evidence watch \
+  --profile hw5103-open-evidence \
+  --state evidence-state.json
+```
+
+The state contains only profile evidence aggregates such as match counts, response/value variants, and first/last timestamps. It does **not** copy the full raw log. The file is written atomically and can be reused by a later watch run with the same profile name and version.
+
+A state file is intentionally optional in the current preview. Without `--state`, watch remains completely stateless.
+
 ## Raw logging
 
 `ebus-evidence` expects an **existing ebusd message-mode raw log**. It does not modify the ebusd configuration for you.

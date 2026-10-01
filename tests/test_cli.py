@@ -24,3 +24,16 @@ def test_watch_raw_is_optional_for_auto_discovery():
     assert args.raw is None
     assert args.profile == "hw5103-open-evidence"
     assert args.seconds == 10.0
+
+
+def test_watch_accepts_state_path():
+    args = build_parser().parse_args(
+        [
+            "watch",
+            "--profile",
+            "hw5103-open-evidence",
+            "--state",
+            "/tmp/evidence-state.json",
+        ]
+    )
+    assert args.state == "/tmp/evidence-state.json"
