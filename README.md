@@ -260,9 +260,22 @@ ebus-evidence watch \
   --state evidence-state.json
 ```
 
-The state contains only profile evidence aggregates such as match counts, response/value variants, and first/last timestamps. It does **not** copy the full raw log. The file is written atomically and can be reused by a later watch run with the same profile name and version.
+The state contains only profile evidence aggregates such as match counts, response/value variants, first/last timestamps, and a compact raw-log checkpoint. It does **not** copy the full raw log. The file is written atomically and can be reused by a later watch run with the same profile name and version.
 
-A state file is intentionally optional in the current preview. Without `--state`, watch remains completely stateless.
+When a checkpoint is present, watch resumes from the exact safe byte offset instead of jumping to the current end. If ebusd rotated once while watch was stopped, the saved file identity can be found in `FILE.old`; watch finishes that file and then continues with the new active raw log.
+
+If neither the active file nor `FILE.old` matches the saved checkpoint, continuous recovery is no longer provable. Watch stops instead of silently pretending there was no gap. To explicitly accept that gap and establish a new checkpoint at the current end:
+
+```bash
+ebus-evidence watch \
+  --profile hw5103-open-evidence \
+  --state evidence-state.json \
+  --reset-checkpoint
+```
+
+The reset is recorded in the state as a continuity reset.
+
+A state file is intentionally optional in the current preview. Without `--state`, watch remains stateless and starts at the current end on every run.
 
 ## Raw logging
 
