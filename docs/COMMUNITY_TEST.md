@@ -24,7 +24,7 @@ cd ebus-evidence
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+python -m pip install -e .
 ```
 
 ## 2. Check ebusd discovery
