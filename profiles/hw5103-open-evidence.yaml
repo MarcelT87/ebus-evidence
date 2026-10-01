@@ -14,6 +14,11 @@ checks:
       from: response
       type: float32le
       offset: 5
+    context:
+      when:
+        value_nonzero: true
+      before_seconds: 120
+      after_seconds: 180
 
   - id: hmu_ba08_variants
     description: HMU B509 /ba08 response values
@@ -26,6 +31,11 @@ checks:
       from: response
       type: u8
       offset: 5
+    context:
+      when:
+        value_nonzero: true
+      before_seconds: 120
+      after_seconds: 180
 
   - id: vwzio_3538_variants
     description: VWZIO B51A /3538 typed response variants
