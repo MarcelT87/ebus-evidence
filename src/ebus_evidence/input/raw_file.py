@@ -20,6 +20,14 @@ class RawParseError(ValueError):
     pass
 
 
+class RawNonFrame(RawParseError):
+    """A valid ebusd message-mode raw record that is not a complete eBUS frame."""
+
+    def __init__(self, kind: str, detail: str):
+        super().__init__(detail)
+        self.kind = kind
+
+
 def unescape_wire(data: bytes) -> bytes:
     """Undo eBUS A9 byte stuffing."""
     out = bytearray()
@@ -126,7 +134,10 @@ def parse_record(record: bytes | str) -> Frame:
         raise RawParseError(str(exc)) from exc
 
     if len(master) < 6:
-        raise RawParseError("master telegram is too short")
+        raise RawNonFrame(
+            "short_fragment",
+            f"short bus fragment ({master.hex() or 'empty'})",
+        )
 
     request_length = master[4]
     request_end = 5 + request_length
