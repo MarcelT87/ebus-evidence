@@ -49,6 +49,10 @@ For a detailed explanation of Docker/native ebusd, USB/network adapters, `ens:`/
 
 **[ebusd setup matrix](docs/EBUSD_SETUPS.md)**
 
+If something fails during installation, discovery, raw logging, watch/resume, bundle creation or verification, see:
+
+**[Troubleshooting](docs/TROUBLESHOOTING.md)**
+
 ## Which setups are supported?
 
 | Setup | Current status |
