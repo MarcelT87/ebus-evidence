@@ -45,3 +45,18 @@ def test_rotated_source_is_ordered_before_active(tmp_path):
 
     assert resolve_raw_sources(active, include_rotated=True) == [rotated, active]
     assert resolve_raw_sources(active, include_rotated=False) == [active]
+
+
+def test_split_record_buffer_keeps_tail_until_next_record():
+    from ebus_evidence.input.raw_file import split_record_buffer
+
+    first = b"2026-10-01 10:00:00.000 <1008b50702090000"
+    second = b"2026-10-01 10:00:01.000 <1008b50702090000"
+    records, tail = split_record_buffer(first + b"\n" + second)
+
+    assert records == [first]
+    assert tail == second
+
+    final, tail = split_record_buffer(tail, flush=True)
+    assert final == [second]
+    assert tail == b""

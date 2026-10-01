@@ -229,6 +229,27 @@ ebus-evidence analyze \
   --json evidence.json
 ```
 
+## Live watch
+
+After `doctor` and `analyze` work, `watch` can follow **new** ebusd raw-log records without reprocessing the historical file:
+
+```bash
+ebus-evidence watch \
+  --profile hw5103-open-evidence
+```
+
+It starts at the current end of the raw log, prints only matching profile evidence, and follows ebusd rename/create rotation. Stop it with `Ctrl-C`.
+
+For a short diagnostic run:
+
+```bash
+ebus-evidence watch \
+  --profile hw5103-open-evidence \
+  --seconds 15
+```
+
+`watch` does not create a database and does not access the eBUS adapter. It only follows the already configured raw-log file.
+
 ## Raw logging
 
 `ebus-evidence` expects an **existing ebusd message-mode raw log**. It does not modify the ebusd configuration for you.
@@ -291,7 +312,7 @@ The tests use small synthetic raw-log fixtures. They do not require a running eb
 Once the offline core is stable:
 
 1. harden automatic read-only ebusd discovery across real Docker and native/systemd installations
-2. continuous read-only watch mode
+2. harden continuous read-only watch mode and add compact state persistence
 3. optional ebusd device metadata
 4. optional MQTT subscription for correlation context
 5. Docker image / Compose example

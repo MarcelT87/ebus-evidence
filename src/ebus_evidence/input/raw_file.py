@@ -59,30 +59,42 @@ def resolve_raw_sources(path: str | Path, include_rotated: bool = False) -> list
     return sources
 
 
+def split_record_buffer(buffer: bytes, *, flush: bool = False) -> tuple[list[bytes], bytes]:
+    """Split timestamp-delimited raw data while preserving a possible tail record."""
+    starts = [match.start() for match in _RECORD_START_RE.finditer(buffer)]
+    if not starts:
+        return ([], b"") if flush else ([], buffer)
+
+    if starts[0] > 0:
+        buffer = buffer[starts[0] :]
+        starts = [match.start() for match in _RECORD_START_RE.finditer(buffer)]
+
+    records: list[bytes] = []
+    for index in range(len(starts) - 1):
+        record = buffer[starts[index] : starts[index + 1]].strip()
+        if record:
+            records.append(record)
+
+    tail = buffer[starts[-1] :]
+    if flush:
+        record = tail.strip()
+        if record:
+            records.append(record)
+        tail = b""
+
+    return records, tail
+
+
 def split_records(path: str | Path, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
     """Yield timestamp-delimited records from a raw-log file."""
     buffer = b""
     with Path(path).open("rb") as handle:
         while chunk := handle.read(chunk_size):
-            buffer += chunk
-            starts = [match.start() for match in _RECORD_START_RE.finditer(buffer)]
-            if not starts:
-                if len(buffer) > 512:
-                    buffer = buffer[-512:]
-                continue
-            if starts[0] > 0:
-                buffer = buffer[starts[0] :]
-                starts = [match.start() for match in _RECORD_START_RE.finditer(buffer)]
-            for index in range(len(starts) - 1):
-                record = buffer[starts[index] : starts[index + 1]].strip()
-                if record:
-                    yield record
-            buffer = buffer[starts[-1] :]
+            records, buffer = split_record_buffer(buffer + chunk)
+            yield from records
 
-    if buffer and _RECORD_START_RE.match(buffer):
-        record = buffer.strip()
-        if record:
-            yield record
+    records, _ = split_record_buffer(buffer, flush=True)
+    yield from records
 
 
 def parse_record(record: bytes | str) -> Frame:

@@ -17,6 +17,7 @@ from ebus_evidence.input.raw_file import (
 from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.report import analyze_frames, format_text
 from ebus_evidence.timeutil import TimezoneError, get_timezone
+from ebus_evidence.watch import run_watch
 
 
 def _resolve_sources(raw_path: str, include_rotated: bool) -> list[Path]:
@@ -232,6 +233,64 @@ def _analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def _watch(args: argparse.Namespace) -> int:
+    try:
+        _validate_timezones(args)
+    except TimezoneError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        profile = load_profile(args.profile)
+    except ProfileError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    raw_path = args.raw
+    discovery: EbusdDiscovery | None = None
+    if raw_path is None:
+        raw_path, discovery, error = _discovered_raw_path()
+        if error:
+            print(f"error: cannot auto-discover usable ebusd raw log: {error}", file=sys.stderr)
+            print("hint: use --raw /path/to/ebusd.raw to override discovery", file=sys.stderr)
+            return 2
+
+    print("eBUS Evidence watch")
+    print(f"Profile: {profile['name']} (v{profile.get('version', 1)})")
+    source = f"auto:{discovery.installation}" if discovery is not None else "manual"
+    print(f"Raw path: {raw_path} ({source})")
+    print("Mode: follow new records only; Ctrl-C to stop")
+    if args.seconds is not None:
+        print(f"Duration: {args.seconds:g} seconds")
+    if args.source_timezone:
+        display = args.display_timezone or args.source_timezone
+        print(f"Timestamps: raw source={args.source_timezone}, display={display}")
+    else:
+        print("Timestamps: raw values, timezone unspecified")
+    print()
+
+    try:
+        stats = run_watch(
+            str(raw_path),
+            profile,
+            source_timezone=args.source_timezone,
+            display_timezone=args.display_timezone,
+            seconds=args.seconds,
+            poll_interval=args.poll_interval,
+            json_lines=args.json_lines,
+        )
+    except OSError as exc:
+        print(f"error: cannot watch raw log: {exc}", file=sys.stderr)
+        return 2
+
+    print()
+    print(
+        f"Watch summary: frames={stats.frames} matches={stats.matches} "
+        f"parse_errors={stats.parse_errors} rotations={stats.rotations}"
+    )
+    return 0
+
 def _add_time_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--source-timezone",
@@ -292,6 +351,39 @@ def build_parser() -> argparse.ArgumentParser:
     _add_time_arguments(analyze)
     analyze.add_argument("--json", help="optional JSON output path")
     analyze.set_defaults(func=_analyze)
+
+    watch = subparsers.add_parser(
+        "watch",
+        help="follow new ebusd raw-log records and print matching evidence",
+    )
+    watch.add_argument(
+        "--raw",
+        help="manual path to an ebusd message-mode raw log; otherwise ebusd is discovered",
+    )
+    watch.add_argument(
+        "--profile",
+        required=True,
+        help="profile path or bundled profile name, e.g. hw5103-open-evidence",
+    )
+    watch.add_argument(
+        "--seconds",
+        type=float,
+        help="optional test/runtime limit; omit to watch until Ctrl-C",
+    )
+    watch.add_argument(
+        "--poll-interval",
+        type=float,
+        default=0.25,
+        help="filesystem poll interval in seconds (default: 0.25)",
+    )
+    watch.add_argument(
+        "--json-lines",
+        action="store_true",
+        help="emit one JSON object per matching event",
+    )
+    _add_time_arguments(watch)
+    watch.set_defaults(func=_watch)
+
     return parser
 
 

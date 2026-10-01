@@ -15,3 +15,12 @@ def test_doctor_accepts_bundled_profile_name():
     )
     assert args.raw is None
     assert args.profile == "hw5103-open-evidence"
+
+
+def test_watch_raw_is_optional_for_auto_discovery():
+    args = build_parser().parse_args(
+        ["watch", "--profile", "hw5103-open-evidence", "--seconds", "10"]
+    )
+    assert args.raw is None
+    assert args.profile == "hw5103-open-evidence"
+    assert args.seconds == 10.0
