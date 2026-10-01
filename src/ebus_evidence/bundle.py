@@ -36,6 +36,21 @@ def _canonical_yaml(data: Any) -> bytes:
     ).encode("utf-8")
 
 
+def _safe_context_raw_name(value: Any) -> str:
+    if not isinstance(value, str) or not value:
+        raise BundleError("context raw_file must be a non-empty filename")
+    pure = PurePosixPath(value)
+    if (
+        "/" in value
+        or "\\" in value
+        or pure.is_absolute()
+        or ".." in pure.parts
+        or pure.name != value
+    ):
+        raise BundleError(f"invalid context raw_file name: {value!r}")
+    return value
+
+
 def _zip_write(archive: zipfile.ZipFile, name: str, data: bytes) -> None:
     info = zipfile.ZipInfo(name, date_time=_ZIP_TIME)
     info.compress_type = zipfile.ZIP_DEFLATED
@@ -95,9 +110,12 @@ def _load_contexts(
                 f"context profile version mismatch in {metadata_path.name}"
             )
 
-        raw_name = metadata.get("raw_file")
-        if not isinstance(raw_name, str) or Path(raw_name).name != raw_name:
-            raise BundleError(f"invalid raw_file in context metadata: {metadata_path.name}")
+        try:
+            raw_name = _safe_context_raw_name(metadata.get("raw_file"))
+        except BundleError as exc:
+            raise BundleError(
+                f"invalid raw_file in context metadata {metadata_path.name}: {exc}"
+            ) from exc
 
         members.append(
             (f"contexts/{metadata_path.name}", _canonical_json(metadata))
@@ -434,9 +452,10 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
                 raise BundleError(f"context/profile name mismatch: {name}")
             if metadata.get("profile_version") != profile.get("version", 1):
                 raise BundleError(f"context/profile version mismatch: {name}")
-            raw_name = metadata.get("raw_file")
-            if not isinstance(raw_name, str) or Path(raw_name).name != raw_name:
-                raise BundleError(f"invalid context raw_file reference: {name}")
+            try:
+                raw_name = _safe_context_raw_name(metadata.get("raw_file"))
+            except BundleError as exc:
+                raise BundleError(f"invalid context raw_file reference in {name}: {exc}") from exc
             referenced_raw.add(f"contexts/{raw_name}")
 
         unexpected_raw = set(context_raw_names) - referenced_raw
