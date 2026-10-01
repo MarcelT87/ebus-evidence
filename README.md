@@ -198,29 +198,34 @@ ebus-evidence doctor \
   --profile profiles/hw5103-open-evidence.yaml
 ```
 
-Then analyze the log:
+Then analyze the log. When ebusd discovery works, neither the raw-log path nor the repository profile path is needed:
+
+```bash
+ebus-evidence analyze \
+  --profile hw5103-open-evidence
+```
+
+For an unusual setup, override the raw-log path explicitly:
 
 ```bash
 ebus-evidence analyze \
   --raw /path/to/ebusd.raw \
-  --profile profiles/hw5103-open-evidence.yaml
+  --profile hw5103-open-evidence
 ```
 
 If ebusd also has a rotated `ebusd.raw.old`, include it in the same chronological analysis:
 
 ```bash
 ebus-evidence analyze \
-  --raw /path/to/ebusd.raw \
   --include-rotated \
-  --profile profiles/hw5103-open-evidence.yaml
+  --profile hw5103-open-evidence
 ```
 
 Write the machine-readable report as JSON as well:
 
 ```bash
 ebus-evidence analyze \
-  --raw /path/to/ebusd.raw \
-  --profile profiles/hw5103-open-evidence.yaml \
+  --profile hw5103-open-evidence \
   --json evidence.json
 ```
 

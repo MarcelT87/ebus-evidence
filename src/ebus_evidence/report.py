@@ -154,6 +154,11 @@ def format_text(report: dict[str, Any]) -> str:
         f"Profile: {report['profile']} (v{report['profile_version']})",
         f"Parsed frames: {report['total_frames']}",
     ]
+    raw_path = report.get("raw_path")
+    raw_path_source = report.get("raw_path_source")
+    if raw_path:
+        suffix = f" ({raw_path_source})" if raw_path_source else ""
+        lines.append(f"Raw path: {raw_path}{suffix}")
     source_files = report.get("source_files", [])
     if source_files:
         lines.append(f"Raw sources: {', '.join(source_files)}")

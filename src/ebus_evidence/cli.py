@@ -82,12 +82,29 @@ def _print_discovery(discovery: EbusdDiscovery) -> None:
     if discovery.raw_file_container:
         print(f"  container file ...... {discovery.raw_file_container}")
     if discovery.raw_file_host:
-        label = "host file" if discovery.installation == "docker" else "file"
-        print(f"  {label:<20} {discovery.raw_file_host}")
+        if discovery.installation == "docker":
+            print(f"  host file ........... {discovery.raw_file_host}")
+        else:
+            print(f"  file ................ {discovery.raw_file_host}")
     elif discovery.raw_file_container:
         print("  host file ........... unresolved (no matching Docker mount)")
     if discovery.raw_size_kb is not None:
         print(f"  size limit .......... {discovery.raw_size_kb} kB")
+
+
+def _discovered_raw_path() -> tuple[str | None, EbusdDiscovery | None, str | None]:
+    discovery = discover_ebusd()
+    if discovery is None:
+        return None, None, "ebusd was not detected"
+    if not discovery.raw_enabled:
+        return None, discovery, "ebusd raw logging is not enabled"
+    if discovery.raw_mode == "bytes":
+        return None, discovery, "ebusd uses byte-level raw logging; message mode is required"
+    if discovery.raw_file_host is None:
+        if discovery.installation == "docker":
+            return None, discovery, "ebusd raw-log container path could not be mapped to the host"
+        return None, discovery, "ebusd --lograwdatafile was not found"
+    return discovery.raw_file_host, discovery, None
 
 
 def _doctor(args: argparse.Namespace) -> int:
@@ -100,11 +117,10 @@ def _doctor(args: argparse.Namespace) -> int:
         print(f"Timezone .............. ERROR ({exc})")
         return 2
 
-    discovered: EbusdDiscovery | None = None
     raw_path = args.raw
 
     if raw_path is None:
-        discovered = discover_ebusd()
+        raw_path, discovered, error = _discovered_raw_path()
         if discovered is None:
             print("ebusd ................. not detected")
             print()
@@ -113,29 +129,18 @@ def _doctor(args: argparse.Namespace) -> int:
             return 2
 
         _print_discovery(discovered)
-
-        if not discovered.raw_enabled:
-            return 2
-        if discovered.raw_mode == "bytes":
+        if error:
             print()
-            print("Raw format ............ ERROR (byte-level logging is not supported)")
-            print("Use --lograwdata without '=bytes'.")
+            print(f"Raw file .............. ERROR ({error})")
+            if discovered.raw_mode == "bytes":
+                print("Use --lograwdata without '=bytes'.")
+            elif discovered.raw_enabled:
+                print("Use --raw /path/to/ebusd.raw for a manual check.")
             return 2
-        if discovered.raw_file_host is None:
-            print()
-            if discovered.installation == "docker":
-                print("Raw file .............. ERROR (container path could not be mapped to host)")
-                print("Use --raw /host/path/to/ebusd.raw for a manual check.")
-            else:
-                print("Raw file .............. ERROR (--lograwdatafile was not found)")
-                print("Configure an explicit raw-log file or use --raw manually.")
-            return 2
-
-        raw_path = discovered.raw_file_host
         print()
 
     try:
-        sources = _resolve_sources(raw_path, bool(args.include_rotated))
+        sources = _resolve_sources(str(raw_path), bool(args.include_rotated))
     except FileNotFoundError as exc:
         print(f"Raw file ............. ERROR ({exc})")
         return 2
@@ -192,8 +197,17 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    raw_path = args.raw
+    discovery: EbusdDiscovery | None = None
+    if raw_path is None:
+        raw_path, discovery, error = _discovered_raw_path()
+        if error:
+            print(f"error: cannot auto-discover usable ebusd raw log: {error}", file=sys.stderr)
+            print("hint: use --raw /path/to/ebusd.raw to override discovery", file=sys.stderr)
+            return 2
+
     try:
-        sources = _resolve_sources(args.raw, bool(args.include_rotated))
+        sources = _resolve_sources(str(raw_path), bool(args.include_rotated))
     except FileNotFoundError as exc:
         print(f"error: raw file not found: {exc}", file=sys.stderr)
         return 2
@@ -205,6 +219,10 @@ def _analyze(args: argparse.Namespace) -> int:
         display_timezone=args.display_timezone,
     )
     report["source_files"] = [source.name for source in sources]
+    report["raw_path"] = str(raw_path)
+    report["raw_path_source"] = (
+        f"auto:{discovery.installation}" if discovery is not None else "manual"
+    )
     print(format_text(report), end="")
 
     if args.json:
@@ -246,18 +264,31 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also read the sibling FILE.old before the active raw log when present",
     )
-    doctor.add_argument("--profile", help="optional YAML evidence profile to validate")
+    doctor.add_argument(
+        "--profile",
+        help="optional profile path or bundled profile name to validate",
+    )
     _add_time_arguments(doctor)
     doctor.set_defaults(func=_doctor)
 
-    analyze = subparsers.add_parser("analyze", help="analyze an existing raw log")
-    analyze.add_argument("--raw", required=True, help="path to an ebusd message-mode raw log")
+    analyze = subparsers.add_parser(
+        "analyze",
+        help="analyze an ebusd raw log; auto-discover it when --raw is omitted",
+    )
+    analyze.add_argument(
+        "--raw",
+        help="manual path to an ebusd message-mode raw log; otherwise ebusd is discovered",
+    )
     analyze.add_argument(
         "--include-rotated",
         action="store_true",
         help="also read the sibling FILE.old before the active raw log when present",
     )
-    analyze.add_argument("--profile", required=True, help="path to a YAML evidence profile")
+    analyze.add_argument(
+        "--profile",
+        required=True,
+        help="profile path or bundled profile name, e.g. hw5103-open-evidence",
+    )
     _add_time_arguments(analyze)
     analyze.add_argument("--json", help="optional JSON output path")
     analyze.set_defaults(func=_analyze)

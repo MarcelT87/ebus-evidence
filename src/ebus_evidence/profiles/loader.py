@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -10,12 +11,35 @@ class ProfileError(ValueError):
     pass
 
 
-def load_profile(path: str | Path) -> dict[str, Any]:
-    profile_path = Path(path)
+def _read_profile_text(path_or_name: str | Path) -> str:
+    path = Path(path_or_name)
+    if path.is_file():
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ProfileError(f"cannot read profile: {exc}") from exc
+
+    value = str(path_or_name)
+    if "/" in value or "\\" in value or path.suffix in {".yaml", ".yml"}:
+        raise ProfileError(f"cannot read profile: file not found: {value}")
+
+    name = value.removesuffix(".yaml").removesuffix(".yml")
+    bundled = resources.files("ebus_evidence").joinpath(
+        "bundled_profiles", f"{name}.yaml"
+    )
     try:
-        data = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        raise ProfileError(f"cannot read profile: {exc}") from exc
+        if not bundled.is_file():
+            raise ProfileError(f"unknown bundled profile: {value}")
+        return bundled.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ProfileError(f"cannot read bundled profile {value}: {exc}") from exc
+
+
+def load_profile(path_or_name: str | Path) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(_read_profile_text(path_or_name))
+    except yaml.YAMLError as exc:
+        raise ProfileError(f"cannot parse profile: {exc}") from exc
 
     if not isinstance(data, dict):
         raise ProfileError("profile root must be a mapping")
