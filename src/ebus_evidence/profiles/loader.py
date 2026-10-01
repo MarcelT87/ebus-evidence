@@ -65,4 +65,31 @@ def load_profile(path_or_name: str | Path) -> dict[str, Any]:
         if value is not None and not isinstance(value, dict):
             raise ProfileError(f"check {check_id} value must be a mapping")
 
+        context = check.get("context")
+        if context is not None:
+            if not isinstance(context, dict):
+                raise ProfileError(f"check {check_id} context must be a mapping")
+            when = context.get("when")
+            if not isinstance(when, dict) or not when:
+                raise ProfileError(f"check {check_id} context requires a non-empty when mapping")
+            allowed_when = {
+                "value_nonzero",
+                "value_equals",
+                "value_not_equals",
+                "response_equals",
+                "response_not_equals",
+            }
+            unknown_when = set(when) - allowed_when
+            if unknown_when:
+                names = ", ".join(sorted(unknown_when))
+                raise ProfileError(
+                    f"check {check_id} context has unsupported when keys: {names}"
+                )
+            for key in ("before_seconds", "after_seconds"):
+                value = context.get(key, 0)
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+                    raise ProfileError(
+                        f"check {check_id} context {key} must be a non-negative number"
+                    )
+
     return data
