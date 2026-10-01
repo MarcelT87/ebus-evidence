@@ -30,20 +30,17 @@ Current development version: `0.1.0.dev0`.
 
 ## Start here
 
-If you are installing the project for the first time, use the step-by-step guide:
+Before installing anything, first identify **where ebusd runs**.
 
-**[Installation and first run](docs/INSTALL.md)**
+| Your setup | Start here |
+|---|---|
+| Home Assistant OS with an eBUSd App/Add-on | **[Home Assistant](docs/HOME_ASSISTANT.md)** |
+| ebusd in Docker on a Linux host | **[Installation and first run](docs/INSTALL.md)** |
+| ebusd installed directly on Linux/systemd | **[Installation and first run](docs/INSTALL.md)** |
+| ebusd on another computer | **[Installation and first run](docs/INSTALL.md)** |
+| Not sure | **[Installation and first run](docs/INSTALL.md)** starts with identification steps |
 
-It covers:
-
-- Docker ebusd;
-- native/systemd ebusd;
-- ebusd on another computer;
-- how to enable the required raw log;
-- first analysis;
-- optional live watch;
-- bundle creation and verification;
-- what to do if you do not know which setup you have.
+If you use **Home Assistant Container** on a normal Linux/Docker host, the important question is still where ebusd itself runs. See **[Home Assistant](docs/HOME_ASSISTANT.md)**.
 
 For a detailed explanation of Docker, native/systemd and remote ebusd installations, see:
 
@@ -63,6 +60,7 @@ The compatibility boundary is intentionally simple:
 | Normal ebusd via native/systemd Linux + readable message-mode raw log | **Supported; more independent validation wanted** |
 | Existing normal ebusd message-mode raw-log file | **Supported** |
 | Normal ebusd on another computer | **Offline/file-based use supported** |
+| Home Assistant OS eBUSd App/Add-on | **File-based workflow supported; ebus-evidence itself runs elsewhere for now** |
 | Direct adapter access | **Intentionally not supported** |
 | ebusd `--lograwdata=bytes` | **Not supported** |
 
