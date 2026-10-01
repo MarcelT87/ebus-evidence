@@ -457,6 +457,8 @@ def run_watch(
             if not tail_terminated:
                 stats.partial_tail += 1
             else:
+                if context_manager is not None:
+                    context_manager.observe(tail)
                 try:
                     frame = parse_record(tail)
                 except RawNonFrame as exc:
