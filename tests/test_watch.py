@@ -95,14 +95,14 @@ def test_watch_tracks_completed_unparseable_records_by_reason(tmp_path, monkeypa
         calls["count"] += 1
         if calls["count"] == 1:
             with path.open("ab") as handle:
-                handle.write(b"2026-10-01 10:00:01.000 <aa\n")
+                handle.write(b"2026-10-01 10:00:01.000 <a\n")
                 handle.write(_record("2026-10-01 10:00:02.000"))
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
     stats = run_watch(path, {"name": "none", "version": 1, "checks": []}, seconds=0.01)
 
     assert stats.skipped_records == 1
-    assert stats.skip_reasons["master telegram is too short"] == 1
+    assert stats.skip_reasons["master segment has an odd number of hex digits"] == 1
 
 
 def test_unfinished_tail_is_not_counted_as_skipped(tmp_path):
@@ -130,15 +130,38 @@ def test_watch_keeps_bounded_skip_samples(tmp_path, monkeypatch):
             with path.open("ab") as handle:
                 for second in range(1, 6):
                     handle.write(
-                        f"2026-10-01 10:00:0{second}.000 <aa\n".encode("ascii")
+                        f"2026-10-01 10:00:0{second}.000 <a\n".encode("ascii")
                     )
                 handle.write(_record("2026-10-01 10:00:06.000"))
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
     stats = run_watch(path, {"name": "none", "version": 1, "checks": []}, seconds=0.01)
 
-    reason = "master telegram is too short"
+    reason = "master segment has an odd number of hex digits"
     assert stats.skipped_records == 5
     assert stats.skip_reasons[reason] == 5
     assert len(stats.skip_samples[reason]) == 3
-    assert "record=2026-10-01 10:00:01.000 <aa" in stats.skip_samples[reason][0]
+    assert "record=2026-10-01 10:00:01.000 <a" in stats.skip_samples[reason][0]
+
+
+def test_watch_classifies_short_raw_fragments_as_non_frames(tmp_path, monkeypatch):
+    path = tmp_path / "ebusd.raw"
+    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    calls = {"count": 0}
+
+    def fake_sleep(_seconds):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            with path.open("ab") as handle:
+                handle.write(b"2026-10-01 10:00:01.000 <00\n")
+                handle.write(b"2026-10-01 10:00:02.000 <01\n")
+                handle.write(_record("2026-10-01 10:00:03.000"))
+
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
+    stats = run_watch(path, {"name": "none", "version": 1, "checks": []}, seconds=0.01)
+
+    assert stats.non_frame_records == 2
+    assert stats.non_frame_kinds["short_fragment"] == 2
+    assert stats.skipped_records == 0
+    assert len(stats.non_frame_samples["short_fragment"]) == 2
