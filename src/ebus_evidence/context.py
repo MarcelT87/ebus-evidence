@@ -192,7 +192,9 @@ class ContextCaptureManager:
         json_path = self.output_dir / f"{stem}.json"
 
         payload = b"".join(record.rstrip(b"\r\n") + b"\n" for record in session.records)
-        raw_path.write_bytes(payload)
+        raw_temp = raw_path.with_name(raw_path.name + ".tmp")
+        raw_temp.write_bytes(payload)
+        raw_temp.replace(raw_path)
 
         metadata = {
             "format": _CONTEXT_FORMAT,
