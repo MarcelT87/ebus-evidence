@@ -161,6 +161,9 @@ def create_bundle(
         1 for name, _ in context_members if name.endswith(".raw")
     )
 
+    if state_summary is None and context_metadata_count == 0:
+        raise BundleError("no evidence found in the requested bundle inputs")
+
     manifest = {
         "format": _BUNDLE_FORMAT,
         "tool_version": __version__,
@@ -176,6 +179,8 @@ def create_bundle(
             "host_metadata_included": False,
             "credentials_included": False,
             "full_raw_log_included": False,
+            "context_raw_may_contain_device_specific_bus_data": context_raw_count > 0,
+            "review_context_raw_before_public_sharing": context_raw_count > 0,
         },
     }
     members.append(("manifest.json", _canonical_json(manifest)))
