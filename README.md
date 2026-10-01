@@ -45,7 +45,7 @@ It covers:
 - bundle creation and verification;
 - what to do if you do not know which setup you have.
 
-For a detailed explanation of Docker/native ebusd, USB/network adapters, `ens:`/`enh:`, mDNS, remote hosts and the difference between adapter TCP and the ebusd client port, see:
+For a detailed explanation of Docker, native/systemd and remote ebusd installations, see:
 
 **[ebusd setup matrix](docs/EBUSD_SETUPS.md)**
 
@@ -66,7 +66,7 @@ The compatibility boundary is intentionally simple:
 | Direct adapter access | **Intentionally not supported** |
 | ebusd `--lograwdata=bytes` | **Not supported** |
 
-The adapter connection itself is ebusd's job. USB, serial, network/TCP, UDP, `ens:`, `enh:` or mDNS do **not** require separate implementations in `ebus-evidence`.
+The adapter connection itself is ebusd's job and does **not** require separate support in `ebus-evidence`.
 
 ```text
 adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
@@ -91,7 +91,7 @@ cd ebus-evidence
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip install -e .
+python -m pip install -e .
 ```
 
 Try automatic read-only discovery:
@@ -235,7 +235,7 @@ Generated runtime data such as `data/`, `*.raw`, `*.zip`, databases, environment
 Install the development dependencies:
 
 ```bash
-pip install -e '.[dev]'
+python -m pip install -e '.[dev]'
 pytest
 ```
 
