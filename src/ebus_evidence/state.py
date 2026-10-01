@@ -46,6 +46,10 @@ def new_state(profile: dict[str, Any]) -> dict[str, Any]:
         "created_at": now,
         "updated_at": now,
         "total_events": 0,
+        "checkpoint": None,
+        "continuity": {
+            "resets": [],
+        },
         "checks": {
             check["id"]: _new_check(check)
             for check in profile["checks"]
@@ -68,6 +72,14 @@ def _validate_state(state: dict[str, Any], profile: dict[str, Any]) -> None:
     if not isinstance(state.get("checks"), dict):
         raise StateError("state checks must be a mapping")
 
+    checkpoint = state.get("checkpoint")
+    if checkpoint is not None:
+        if not isinstance(checkpoint, dict):
+            raise StateError("state checkpoint must be a mapping or null")
+        for key in ("device", "inode", "offset"):
+            if not isinstance(checkpoint.get(key), int) or checkpoint[key] < 0:
+                raise StateError(f"state checkpoint requires non-negative integer {key}")
+
 
 def load_state(path: str | Path, profile: dict[str, Any]) -> dict[str, Any]:
     state_path = Path(path)
@@ -79,9 +91,19 @@ def load_state(path: str | Path, profile: dict[str, Any]) -> dict[str, Any]:
         raise StateError(f"cannot read state: {exc}") from exc
     if not isinstance(data, dict):
         raise StateError("state root must be a mapping")
+
+    # Backward-compatible additions to state-v1.
+    data.setdefault("checkpoint", None)
+    data.setdefault("continuity", {"resets": []})
+    if not isinstance(data["continuity"], dict):
+        raise StateError("state continuity must be a mapping")
+    data["continuity"].setdefault("resets", [])
+    if not isinstance(data["continuity"]["resets"], list):
+        raise StateError("state continuity resets must be a list")
+
     _validate_state(data, profile)
 
-    # Allow profile descriptions/check ordering to evolve only when the profile
+    # Allow descriptions/check ordering to evolve only when the profile
     # version was intentionally kept compatible.
     for check in profile["checks"]:
         data["checks"].setdefault(check["id"], _new_check(check))
@@ -168,9 +190,42 @@ class EvidenceStateStore:
             state=load_state(state_path, profile),
         )
 
-    def add(self, event: dict[str, Any]) -> None:
-        update_state(self.state, event)
+    def save(self) -> None:
         save_state(self.path, self.state)
+
+    def add(self, event: dict[str, Any], *, save: bool = True) -> None:
+        update_state(self.state, event)
+        if save:
+            self.save()
+
+    @property
+    def checkpoint(self) -> dict[str, int] | None:
+        value = self.state.get("checkpoint")
+        return deepcopy(value) if isinstance(value, dict) else None
+
+    def set_checkpoint(self, checkpoint: dict[str, int], *, save: bool = True) -> bool:
+        normalized = {
+            "device": int(checkpoint["device"]),
+            "inode": int(checkpoint["inode"]),
+            "offset": int(checkpoint["offset"]),
+        }
+        changed = self.state.get("checkpoint") != normalized
+        self.state["checkpoint"] = normalized
+        if changed:
+            self.state["updated_at"] = _utc_now()
+            if save:
+                self.save()
+        return changed
+
+    def clear_checkpoint(self, *, reason: str | None = None, save: bool = True) -> None:
+        self.state["checkpoint"] = None
+        if reason:
+            continuity = self.state.setdefault("continuity", {"resets": []})
+            resets = continuity.setdefault("resets", [])
+            resets.append({"at": _utc_now(), "reason": reason})
+        self.state["updated_at"] = _utc_now()
+        if save:
+            self.save()
 
     @property
     def total_events(self) -> int:
