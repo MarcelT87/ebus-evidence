@@ -26,7 +26,6 @@ If your adapter already works with normal ebusd, its connection type usually doe
 | Normal ebusd on native/systemd Linux with a readable message-mode raw log | **Supported** |
 | Existing normal ebusd message-mode raw-log file | **Supported** |
 | Normal ebusd on another host, with the raw log copied or mounted read-only | **Supported for offline/file-based use** |
-| micro-ebusd output | **Not yet validated** |
 | Direct adapter access | **Intentionally not supported** |
 | ebusd byte-mode raw log | **Not supported** |
 
@@ -181,34 +180,6 @@ ebusctl -> ebusd client port
 The ebusd client interface is a different connection.
 
 `ebus-evidence` does not currently use it as the primary evidence source because the message-mode raw-log file is the common, reproducible input.
-
----
-
-## micro-ebusd is different
-
-micro-ebusd is not just another adapter transport for normal ebusd.
-
-It can run the ebusd-like processing directly on supported ESP32 adapter firmware.
-
-That changes the data-source boundary:
-
-```text
-normal case:
-adapter -> normal ebusd -> raw log -> ebus-evidence
-
-micro-ebusd case:
-adapter + micro-ebusd -> downloadable/API/log output -> not yet validated
-```
-
-Before `ebus-evidence` claims micro-ebusd support, the project should first:
-
-1. obtain a real micro-ebusd log/export;
-2. record the firmware version;
-3. compare its format with normal ebusd message mode;
-4. test whether the existing parser is compatible;
-5. add a small importer only if needed.
-
-No direct adapter implementation should be added merely to support micro-ebusd.
 
 ---
 
