@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from ebus_evidence.context import ContextCaptureManager
 from ebus_evidence.decoders import DecodeError, decode_value
 from ebus_evidence.input.raw_file import (
     RawNonFrame,
@@ -34,6 +35,8 @@ class WatchStats:
     skipped_records: int = 0
     partial_tail: int = 0
     rotations: int = 0
+    context_triggers: int = 0
+    context_captures: int = 0
     resume_mode: str = "fresh_end"
     non_frame_kinds: Counter[str] = field(default_factory=Counter)
     non_frame_samples: dict[str, list[str]] = field(default_factory=dict)
@@ -333,6 +336,7 @@ def run_watch(
     json_lines: bool = False,
     state_store: EvidenceStateStore | None = None,
     state_flush_interval: float = 5.0,
+    context_dir: str | Path | None = None,
 ) -> WatchStats:
     follower = RawLogFollower(
         raw_path,
@@ -344,6 +348,11 @@ def run_watch(
         raise ValueError("state_flush_interval must be greater than zero")
 
     stats = WatchStats(resume_mode=follower.resume_mode)
+    context_manager = (
+        ContextCaptureManager(context_dir, profile)
+        if context_dir is not None
+        else None
+    )
     started = time.monotonic()
     last_state_flush = started
     state_dirty = False
@@ -374,6 +383,8 @@ def run_watch(
     def add_event(event: dict[str, Any]) -> None:
         nonlocal state_dirty
         stats.matches += 1
+        if context_manager is not None:
+            context_manager.trigger_event(event)
         if state_store is not None:
             # Evidence and the matching file cursor are staged in memory and
             # flushed together, keeping the persisted state internally
@@ -402,6 +413,8 @@ def run_watch(
 
     def consume(records: list[bytes]) -> None:
         for record in records:
+            if context_manager is not None:
+                context_manager.observe(record)
             try:
                 frame = parse_record(record)
             except RawNonFrame as exc:
@@ -468,5 +481,9 @@ def run_watch(
         stage_checkpoint(final_checkpoint)
         flush_state(force=True)
         stats.rotations = follower.rotations
+        if context_manager is not None:
+            context_manager.finish()
+            stats.context_triggers = context_manager.triggered
+            stats.context_captures = context_manager.completed
 
     return stats
