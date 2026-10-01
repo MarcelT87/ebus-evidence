@@ -94,6 +94,7 @@ class ContextCaptureManager:
         self.buffer: Deque[tuple[datetime, bytes]] = deque()
         self.active: dict[str, ContextSession] = {}
         self.completed = 0
+        self.triggered = 0
         self._sequence = 0
 
     @property
@@ -128,6 +129,7 @@ class ContextCaptureManager:
         if not isinstance(context, dict) or not context_should_trigger(event, context):
             return False
 
+        self.triggered += 1
         timestamp = datetime.strptime(event["timestamp"]["raw"], _RAW_TS_FORMAT)
         before = float(context.get("before_seconds", 0))
         after = float(context.get("after_seconds", 0))
