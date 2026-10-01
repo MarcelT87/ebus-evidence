@@ -4,7 +4,7 @@ import zipfile
 
 import pytest
 
-from ebus_evidence.bundle import BundleError, create_bundle, shared_state
+from ebus_evidence.bundle import BundleError, create_bundle, shared_state, verify_bundle
 from ebus_evidence.state import new_state, save_state, update_state
 
 
@@ -215,3 +215,80 @@ def test_context_only_empty_directory_is_rejected(tmp_path):
             PROFILE,
             context_dir=context_dir,
         )
+
+
+def test_verify_accepts_valid_bundle(tmp_path):
+    state_path = tmp_path / "state.json"
+    context_dir = tmp_path / "contexts"
+    _write_state(state_path)
+    _write_context(context_dir)
+    output = tmp_path / "bundle.zip"
+
+    created = create_bundle(
+        output,
+        PROFILE,
+        state_path=state_path,
+        context_dir=context_dir,
+    )
+    verified = verify_bundle(output)
+
+    assert verified["valid"] is True
+    assert verified["sha256"] == created["sha256"]
+    assert verified["profile"] == PROFILE["name"]
+    assert verified["profile_version"] == PROFILE["version"]
+    assert verified["state_included"] is True
+    assert verified["context_metadata_count"] == 1
+    assert verified["context_raw_count"] == 1
+    assert verified["deterministic_layout"] is True
+
+
+def test_verify_rejects_tampered_member(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original.zip"
+    tampered = tmp_path / "tampered.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src, zipfile.ZipFile(tampered, "w") as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "evidence/state.json":
+                data = data.replace(b'"total_events": 1', b'"total_events": 9')
+            dst.writestr(info, data)
+
+    with pytest.raises(BundleError, match="checksum mismatch"):
+        verify_bundle(tampered)
+
+
+def test_verify_rejects_unsafe_member_path(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original.zip"
+    unsafe = tmp_path / "unsafe.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src, zipfile.ZipFile(unsafe, "w") as dst:
+        for info in src.infolist():
+            dst.writestr(info, src.read(info.filename))
+        dst.writestr("../escape.txt", b"nope")
+
+    with pytest.raises(BundleError, match="unsafe bundle member path"):
+        verify_bundle(unsafe)
+
+
+def test_verify_allows_repacked_valid_bundle_but_flags_layout(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original.zip"
+    repacked = tmp_path / "repacked.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src, zipfile.ZipFile(
+        repacked, "w", compression=zipfile.ZIP_DEFLATED
+    ) as dst:
+        for name in reversed(src.namelist()):
+            dst.writestr(name, src.read(name))
+
+    verified = verify_bundle(repacked)
+    assert verified["valid"] is True
+    assert verified["deterministic_layout"] is False
