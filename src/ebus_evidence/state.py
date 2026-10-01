@@ -80,6 +80,22 @@ def _validate_state(state: dict[str, Any], profile: dict[str, Any]) -> None:
             if not isinstance(checkpoint.get(key), int) or checkpoint[key] < 0:
                 raise StateError(f"state checkpoint requires non-negative integer {key}")
 
+        anchor_start = checkpoint.get("anchor_start")
+        anchor_sha256 = checkpoint.get("anchor_sha256")
+        if anchor_start is not None or anchor_sha256 is not None:
+            if not isinstance(anchor_start, int) or not 0 <= anchor_start <= checkpoint["offset"]:
+                raise StateError(
+                    "state checkpoint anchor_start must be an integer within the checkpoint"
+                )
+            if (
+                not isinstance(anchor_sha256, str)
+                or len(anchor_sha256) != 64
+                or any(ch not in "0123456789abcdef" for ch in anchor_sha256)
+            ):
+                raise StateError(
+                    "state checkpoint anchor_sha256 must be a lowercase SHA-256 hex digest"
+                )
+
 
 def load_state(path: str | Path, profile: dict[str, Any]) -> dict[str, Any]:
     state_path = Path(path)
@@ -199,16 +215,19 @@ class EvidenceStateStore:
             self.save()
 
     @property
-    def checkpoint(self) -> dict[str, int] | None:
+    def checkpoint(self) -> dict[str, Any] | None:
         value = self.state.get("checkpoint")
         return deepcopy(value) if isinstance(value, dict) else None
 
-    def set_checkpoint(self, checkpoint: dict[str, int], *, save: bool = True) -> bool:
-        normalized = {
+    def set_checkpoint(self, checkpoint: dict[str, Any], *, save: bool = True) -> bool:
+        normalized: dict[str, Any] = {
             "device": int(checkpoint["device"]),
             "inode": int(checkpoint["inode"]),
             "offset": int(checkpoint["offset"]),
         }
+        if "anchor_start" in checkpoint and "anchor_sha256" in checkpoint:
+            normalized["anchor_start"] = int(checkpoint["anchor_start"])
+            normalized["anchor_sha256"] = str(checkpoint["anchor_sha256"])
         changed = self.state.get("checkpoint") != normalized
         self.state["checkpoint"] = normalized
         if changed:
