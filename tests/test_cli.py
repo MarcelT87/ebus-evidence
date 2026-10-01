@@ -44,3 +44,18 @@ def test_watch_state_defaults_to_none():
         ["watch", "--profile", "hw5103-open-evidence"]
     )
     assert args.state is None
+
+
+def test_watch_accepts_checkpoint_reset_flag():
+    args = build_parser().parse_args(
+        [
+            "watch",
+            "--profile",
+            "hw5103-open-evidence",
+            "--state",
+            "/tmp/evidence-state.json",
+            "--reset-checkpoint",
+        ]
+    )
+    assert args.state == "/tmp/evidence-state.json"
+    assert args.reset_checkpoint is True
