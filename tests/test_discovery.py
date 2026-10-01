@@ -32,13 +32,13 @@ def test_parse_ebusd_bytes_mode():
 def test_map_container_raw_path_to_host():
     mounts = [
         DockerMount(
-            source="/opt/docker/ebusd/rawlog",
+            source="/srv/ebusd/rawlog",
             destination="/ebusd-raw",
         )
     ]
     assert (
         map_container_path_to_host("/ebusd-raw/ebusd.raw", mounts)
-        == "/opt/docker/ebusd/rawlog/ebusd.raw"
+        == "/srv/ebusd/rawlog/ebusd.raw"
     )
 
 
@@ -58,7 +58,7 @@ def test_docker_discovery_uses_process_args_and_mounts_only(monkeypatch):
             '{{range .Mounts}}{{println .Source "|" .Destination}}{{end}}',
             "abc123",
         ):
-            "/opt/docker/ebusd/rawlog | /ebusd-raw\n",
+            "/srv/ebusd/rawlog | /ebusd-raw\n",
     }
 
     def fake_runner(command):
@@ -69,7 +69,7 @@ def test_docker_discovery_uses_process_args_and_mounts_only(monkeypatch):
     assert result.container_name == "ebusd"
     assert result.raw_mode == "messages"
     assert result.raw_file_container == "/ebusd-raw/ebusd.raw"
-    assert result.raw_file_host == "/opt/docker/ebusd/rawlog/ebusd.raw"
+    assert result.raw_file_host == "/srv/ebusd/rawlog/ebusd.raw"
     assert result.raw_size_kb == 102400
 
 
