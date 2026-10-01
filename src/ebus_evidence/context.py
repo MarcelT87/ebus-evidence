@@ -183,13 +183,16 @@ class ContextCaptureManager:
     def _finalize(self, check_id: str, *, complete_after_window: bool) -> None:
         session = self.active.pop(check_id)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self._sequence += 1
-
         safe_id = _SAFE_ID_RE.sub("_", check_id).strip("_") or "context"
         stamp = session.first_trigger_at.strftime("%Y%m%dT%H%M%S.%f")[:-3]
-        stem = f"{stamp}_{safe_id}_{self._sequence:04d}"
-        raw_path = self.output_dir / f"{stem}.raw"
-        json_path = self.output_dir / f"{stem}.json"
+
+        while True:
+            self._sequence += 1
+            stem = f"{stamp}_{safe_id}_{self._sequence:04d}"
+            raw_path = self.output_dir / f"{stem}.raw"
+            json_path = self.output_dir / f"{stem}.json"
+            if not raw_path.exists() and not json_path.exists():
+                break
 
         payload = b"".join(record.rstrip(b"\r\n") + b"\n" for record in session.records)
         raw_temp = raw_path.with_name(raw_path.name + ".tmp")
