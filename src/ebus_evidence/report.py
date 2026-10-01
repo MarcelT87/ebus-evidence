@@ -6,6 +6,7 @@ from typing import Any, Iterable
 from ebus_evidence.decoders import DecodeError, decode_value
 from ebus_evidence.matching import frame_matches
 from ebus_evidence.models import Frame
+from ebus_evidence.timeutil import normalize_timestamp
 
 
 _MAX_VARIANTS = 20
@@ -33,7 +34,13 @@ def _new_state(check: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def analyze_frames(frames: Iterable[Frame], profile: dict[str, Any]) -> dict[str, Any]:
+def analyze_frames(
+    frames: Iterable[Frame],
+    profile: dict[str, Any],
+    *,
+    source_timezone: str | None = None,
+    display_timezone: str | None = None,
+) -> dict[str, Any]:
     checks = profile["checks"]
     states = {check["id"]: _new_state(check) for check in checks}
 
@@ -87,15 +94,31 @@ def analyze_frames(frames: Iterable[Frame], profile: dict[str, Any]) -> dict[str
                 "id": state["id"],
                 "description": state["description"],
                 "matches": state["matches"],
-                "first": state["first"],
-                "last": state["last"],
+                "first_seen": normalize_timestamp(
+                    state["first"],
+                    source_timezone=source_timezone,
+                    display_timezone=display_timezone,
+                ) if state["first"] else None,
+                "last_seen": normalize_timestamp(
+                    state["last"],
+                    source_timezone=source_timezone,
+                    display_timezone=display_timezone,
+                ) if state["last"] else None,
                 "response_variant_count": len(state["response_variants"]),
                 "top_responses": [
                     {
                         "response": response,
                         "count": count,
-                        "first_seen": state["response_first"][response],
-                        "last_seen": state["response_last"][response],
+                        "first_seen": normalize_timestamp(
+                            state["response_first"][response],
+                            source_timezone=source_timezone,
+                            display_timezone=display_timezone,
+                        ),
+                        "last_seen": normalize_timestamp(
+                            state["response_last"][response],
+                            source_timezone=source_timezone,
+                            display_timezone=display_timezone,
+                        ),
                     }
                     for response, count in top_responses
                 ],
@@ -111,12 +134,18 @@ def analyze_frames(frames: Iterable[Frame], profile: dict[str, Any]) -> dict[str
         )
 
     return {
-        "format": "ebus-evidence-report-v1",
+        "format": "ebus-evidence-report-v2",
         "profile": profile["name"],
         "profile_version": profile.get("version", 1),
+        "timestamp_source_timezone": source_timezone,
+        "timestamp_display_timezone": display_timezone,
         "total_frames": total_frames,
         "checks": result_checks,
     }
+
+
+def _seen_text(timestamp: dict[str, str | None]) -> str:
+    return timestamp.get("display") or timestamp["raw"]
 
 
 def format_text(report: dict[str, Any]) -> str:
@@ -128,6 +157,18 @@ def format_text(report: dict[str, Any]) -> str:
     source_files = report.get("source_files", [])
     if source_files:
         lines.append(f"Raw sources: {', '.join(source_files)}")
+
+    source_timezone = report.get("timestamp_source_timezone")
+    display_timezone = report.get("timestamp_display_timezone")
+    if source_timezone:
+        if display_timezone:
+            lines.append(
+                f"Timestamps: raw source={source_timezone}, display={display_timezone}"
+            )
+        else:
+            lines.append(f"Timestamps: raw source={source_timezone}")
+    else:
+        lines.append("Timestamps: raw values, timezone unspecified")
     lines.append("")
 
     for check in report["checks"]:
@@ -135,10 +176,12 @@ def format_text(report: dict[str, Any]) -> str:
         lines.append(f"  matches: {check['matches']}")
         lines.append(f"  response variants: {check['response_variant_count']}")
         for item in check["top_responses"][:5]:
-            if item["first_seen"] == item["last_seen"]:
-                seen = f" @ {item['first_seen']}"
+            first_seen = _seen_text(item["first_seen"])
+            last_seen = _seen_text(item["last_seen"])
+            if first_seen == last_seen:
+                seen = f" @ {first_seen}"
             else:
-                seen = f"  {item['first_seen']} -> {item['last_seen']}"
+                seen = f"  {first_seen} -> {last_seen}"
             lines.append(f"    {item['count']:>7}  {item['response']}{seen}")
         if check["decoded"] or check["no_response"] or check["decode_errors"]:
             lines.append(

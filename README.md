@@ -149,6 +149,33 @@ ebus-evidence doctor \
 
 If a rotated `.old` file exists, add `--include-rotated`.
 
+### Timestamp timezone
+
+ebusd raw records contain a timestamp without an explicit UTC offset. `ebus-evidence` therefore **does not guess the timezone**.
+
+Without extra options, reports preserve the exact raw timestamp and label its timezone as unspecified.
+
+If you know the timezone used by ebusd, provide it explicitly:
+
+```bash
+ebus-evidence analyze \
+  --raw /path/to/ebusd.raw \
+  --source-timezone UTC \
+  --profile profiles/hw5103-open-evidence.yaml
+```
+
+You can additionally choose a timezone for human-readable output:
+
+```bash
+ebus-evidence analyze \
+  --raw /path/to/ebusd.raw \
+  --source-timezone UTC \
+  --display-timezone Europe/Berlin \
+  --profile profiles/hw5103-open-evidence.yaml
+```
+
+The JSON report keeps the original raw timestamp and, when a source timezone is supplied, also records a normalized UTC timestamp and a display timestamp.
+
 > ebusd installations differ. The important part is not where ebusd runs, but that `ebus-evidence` can read the message-mode raw log file. No Proxmox, Docker, MQTT or analyzer database is required.
 
 ## Quick start

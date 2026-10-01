@@ -15,6 +15,7 @@ from ebus_evidence.input.raw_file import (
 )
 from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.report import analyze_frames, format_text
+from ebus_evidence.timeutil import TimezoneError, get_timezone
 
 
 def _resolve_sources(args: argparse.Namespace) -> list[Path]:
@@ -24,10 +25,21 @@ def _resolve_sources(args: argparse.Namespace) -> list[Path]:
     return resolve_raw_sources(raw, include_rotated=bool(args.include_rotated))
 
 
+def _validate_timezones(args: argparse.Namespace) -> None:
+    get_timezone(args.source_timezone)
+    get_timezone(args.display_timezone)
+
+
 def _doctor(args: argparse.Namespace) -> int:
     profile_path = Path(args.profile)
     print(f"eBUS Evidence {__version__}")
     print()
+
+    try:
+        _validate_timezones(args)
+    except TimezoneError as exc:
+        print(f"Timezone .............. ERROR ({exc})")
+        return 2
 
     try:
         sources = _resolve_sources(args)
@@ -71,6 +83,12 @@ def _doctor(args: argparse.Namespace) -> int:
             return 2
 
     print("Raw format ........... OK")
+    if args.source_timezone:
+        print(f"Source timezone ...... OK ({args.source_timezone})")
+        if args.display_timezone:
+            print(f"Display timezone ..... OK ({args.display_timezone})")
+    else:
+        print("Source timezone ...... unspecified (raw timestamps preserved)")
     print()
     print("No eBUS adapter access.")
     print("No active ebusd commands.")
@@ -81,6 +99,12 @@ def _doctor(args: argparse.Namespace) -> int:
 
 
 def _analyze(args: argparse.Namespace) -> int:
+    try:
+        _validate_timezones(args)
+    except TimezoneError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     try:
         profile = load_profile(args.profile)
     except ProfileError as exc:
@@ -93,7 +117,12 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"error: raw file not found: {exc}", file=sys.stderr)
         return 2
 
-    report = analyze_frames(iter_frames_many(sources), profile)
+    report = analyze_frames(
+        iter_frames_many(sources),
+        profile,
+        source_timezone=args.source_timezone,
+        display_timezone=args.display_timezone,
+    )
     report["source_files"] = [source.name for source in sources]
     print(format_text(report), end="")
 
@@ -112,6 +141,14 @@ def _add_raw_arguments(parser: argparse.ArgumentParser) -> None:
         help="also read the sibling FILE.old before the active raw log when present",
     )
     parser.add_argument("--profile", required=True, help="path to a YAML evidence profile")
+    parser.add_argument(
+        "--source-timezone",
+        help="IANA timezone of raw ebusd timestamps, e.g. UTC or Europe/Berlin",
+    )
+    parser.add_argument(
+        "--display-timezone",
+        help="optional IANA timezone used for human-readable timestamps",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
