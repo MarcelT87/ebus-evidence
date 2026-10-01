@@ -21,6 +21,7 @@ def _new_state(check: dict[str, Any]) -> dict[str, Any]:
         "last": None,
         "response_variants": Counter(),
         "decoded": 0,
+        "no_response": 0,
         "decode_errors": 0,
         "nonzero": 0,
         "minimum": None,
@@ -49,6 +50,11 @@ def analyze_frames(frames: Iterable[Frame], profile: dict[str, Any]) -> dict[str
             value_spec = check.get("value")
             if value_spec is None:
                 continue
+
+            if str(value_spec.get("from", "response")) == "response" and frame.response is None:
+                state["no_response"] += 1
+                continue
+
             try:
                 value = decode_value(frame, value_spec)
             except DecodeError:
@@ -83,6 +89,7 @@ def analyze_frames(frames: Iterable[Frame], profile: dict[str, Any]) -> dict[str
                     for response, count in top_responses
                 ],
                 "decoded": state["decoded"],
+                "no_response": state["no_response"],
                 "decode_errors": state["decode_errors"],
                 "nonzero": state["nonzero"],
                 "minimum": state["minimum"],
@@ -112,8 +119,13 @@ def format_text(report: dict[str, Any]) -> str:
         lines.append(f"[{check['id']}] {check['description']}")
         lines.append(f"  matches: {check['matches']}")
         lines.append(f"  response variants: {check['response_variant_count']}")
-        if check["decoded"] or check["decode_errors"]:
-            lines.append(f"  decoded: {check['decoded']} (errors: {check['decode_errors']})")
+        for item in check["top_responses"][:5]:
+            lines.append(f"    {item['count']:>7}  {item['response']}")
+        if check["decoded"] or check["no_response"] or check["decode_errors"]:
+            lines.append(
+                f"  decoded: {check['decoded']} "
+                f"(no response: {check['no_response']}, errors: {check['decode_errors']})"
+            )
             lines.append(f"  non-zero: {check['nonzero']}")
             lines.append(f"  range: {check['minimum']} .. {check['maximum']}")
             values = check["distinct_values"]
