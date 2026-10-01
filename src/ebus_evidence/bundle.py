@@ -135,9 +135,12 @@ def create_bundle(
     state_summary = None
 
     if state_path is not None:
+        state_file = Path(state_path)
+        if not state_file.is_file():
+            raise BundleError(f"evidence state not found: {state_file}")
         try:
-            state = load_state(state_path, profile)
-        except Exception as exc:
+            state = load_state(state_file, profile)
+        except (OSError, ValueError) as exc:
             raise BundleError(f"cannot load evidence state: {exc}") from exc
         state_summary = shared_state(state)
         members.append(("evidence/state.json", _canonical_json(state_summary)))
