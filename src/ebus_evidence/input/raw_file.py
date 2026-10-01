@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Iterator
+
+from ebus_evidence.models import Frame
+
+
+_TIMESTAMP = rb"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}"
+_RECORD_START_RE = re.compile(rb"(?=" + _TIMESTAMP + rb" [<>])")
+_RECORD_RE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(.+)$",
+    re.S,
+)
+_SEGMENT_RE = re.compile(r"([<>])([0-9a-fA-F]+)")
+
+
+class RawParseError(ValueError):
+    pass
+
+
+def unescape_wire(data: bytes) -> bytes:
+    """Undo eBUS A9 byte stuffing."""
+    out = bytearray()
+    i = 0
+    while i < len(data):
+        byte = data[i]
+        if byte != 0xA9:
+            out.append(byte)
+            i += 1
+            continue
+        if i + 1 >= len(data):
+            raise RawParseError("truncated eBUS escape")
+        escaped = data[i + 1]
+        if escaped == 0x00:
+            out.append(0xA9)
+        elif escaped == 0x01:
+            out.append(0xAA)
+        else:
+            raise RawParseError(f"invalid eBUS escape A9 {escaped:02x}")
+        i += 2
+    return bytes(out)
+
+
+def split_records(path: str | Path, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
+    """Yield complete timestamp-delimited records from a closed raw-log file."""
+    buffer = b""
+    with Path(path).open("rb") as handle:
+        while chunk := handle.read(chunk_size):
+            buffer += chunk
+            starts = [match.start() for match in _RECORD_START_RE.finditer(buffer)]
+            if not starts:
+                if len(buffer) > 512:
+                    buffer = buffer[-512:]
+                continue
+            if starts[0] > 0:
+                buffer = buffer[starts[0] :]
+                starts = [match.start() for match in _RECORD_START_RE.finditer(buffer)]
+            for index in range(len(starts) - 1):
+                record = buffer[starts[index] : starts[index + 1]].strip()
+                if record:
+                    yield record
+            buffer = buffer[starts[-1] :]
+
+    if buffer and _RECORD_START_RE.match(buffer):
+        record = buffer.strip()
+        if record:
+            yield record
+
+
+def parse_record(record: bytes | str) -> Frame:
+    """Parse one ebusd message-mode raw record into a normalized frame."""
+    if isinstance(record, bytes):
+        try:
+            line = record.decode("ascii", "strict").strip()
+        except UnicodeDecodeError as exc:
+            raise RawParseError("record is not ASCII") from exc
+    else:
+        line = record.strip()
+
+    match = _RECORD_RE.match(line)
+    if not match:
+        raise RawParseError("record has no supported timestamp prefix")
+    timestamp, body = match.groups()
+
+    segments = _SEGMENT_RE.findall(body)
+    if not segments:
+        raise RawParseError("record contains no eBUS hex segment")
+
+    first_direction, first_hex = segments[0]
+    if len(first_hex) % 2:
+        raise RawParseError("master segment has an odd number of hex digits")
+
+    try:
+        master = unescape_wire(bytes.fromhex(first_hex))
+    except ValueError as exc:
+        raise RawParseError(str(exc)) from exc
+
+    if len(master) < 6:
+        raise RawParseError("master telegram is too short")
+
+    request_length = master[4]
+    request_end = 5 + request_length
+    if request_end > len(master):
+        raise RawParseError("request length exceeds telegram length")
+
+    source = f"{master[0]:02x}"
+    target = f"{master[1]:02x}"
+    pbsb = f"{master[2]:02x}{master[3]:02x}"
+    request = master[4:request_end].hex()
+    response = None
+
+    try:
+        if first_direction == "<":
+            pos = request_end + 1
+            if pos < len(master) and master[pos] in (0x00, 0xFF):
+                pos += 1
+            if pos < len(master):
+                response_length = master[pos]
+                if response_length <= 32 and pos + 1 + response_length <= len(master):
+                    response = master[pos : pos + 1 + response_length].hex()
+        else:
+            incoming = next((value for direction, value in segments[1:] if direction == "<"), None)
+            if incoming and len(incoming) % 2 == 0:
+                slave = unescape_wire(bytes.fromhex(incoming))
+                pos = 1 if slave and slave[0] in (0x00, 0xFF) else 0
+                if pos < len(slave):
+                    response_length = slave[pos]
+                    if response_length <= 32 and pos + 1 + response_length <= len(slave):
+                        response = slave[pos : pos + 1 + response_length].hex()
+    except (RawParseError, ValueError):
+        response = None
+
+    return Frame(
+        timestamp=timestamp,
+        direction=first_direction,
+        initiated_by_ebusd=first_direction == ">",
+        source=source,
+        target=target,
+        pbsb=pbsb,
+        request=request,
+        response=response,
+    )
+
+
+def iter_frames(path: str | Path) -> Iterator[Frame]:
+    for record in split_records(path):
+        try:
+            yield parse_record(record)
+        except RawParseError:
+            continue
