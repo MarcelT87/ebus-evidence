@@ -117,7 +117,11 @@ If automatic discovery fails, first determine where normal ebusd runs.
 docker ps --format 'table {{.Names}}\t{{.Image}}' | grep -i ebusd
 ```
 
-If this shows an ebusd container, see [ebusd setup matrix](EBUSD_SETUPS.md#3-docker-ebusd).
+If this shows an ebusd container, see [ebusd setup matrix](EBUSD_SETUPS.md#docker-ebusd).
+
+If `docker ps` itself returns a permission error, automatic Docker discovery cannot work for that user yet. Fix Docker access using the normal permission model of your Docker installation, or use an explicit readable host raw-log path with `--raw`.
+
+Do not make the Docker socket world-writable just to make discovery work.
 
 ## systemd check
 
@@ -125,7 +129,7 @@ If this shows an ebusd container, see [ebusd setup matrix](EBUSD_SETUPS.md#3-doc
 systemctl status ebusd --no-pager
 ```
 
-If this shows an active service, see [ebusd setup matrix](EBUSD_SETUPS.md#4-native--systemd-ebusd).
+If this shows an active service, see [ebusd setup matrix](EBUSD_SETUPS.md#nativesystemd-ebusd).
 
 ## Neither is found
 
@@ -663,39 +667,17 @@ Recommended current options:
 1. copy the normal message-mode raw log;
 2. make the raw-log directory available through a secure read-only filesystem mount.
 
-See [ebusd setup matrix](EBUSD_SETUPS.md#5-ebusd-on-another-computer).
+See [ebusd setup matrix](EBUSD_SETUPS.md#ebusd-on-another-computer).
 
 ---
 
-# 30. My adapter uses TCP / UDP / ens / enh / mDNS — do I need a different parser?
-
-No, not merely because of the adapter transport.
-
-For normal ebusd, the intended architecture is:
-
-```text
-adapter transport
-       ↓
-normal ebusd
-       ↓
-message-mode raw log
-       ↓
-ebus-evidence
-```
-
-The raw-log format is the common boundary.
-
-See [ebusd setup matrix](EBUSD_SETUPS.md).
-
----
-
-# 31. Tests fail after updating
+# 30. Tests fail after updating
 
 Activate the development environment and install development dependencies:
 
 ```bash
 source .venv/bin/activate
-pip install -e '.[dev]'
+python -m pip install -e '.[dev]'
 pytest -q
 ```
 
@@ -718,7 +700,7 @@ Do not include unrelated private configuration.
 
 ---
 
-# 32. I accidentally created raw logs, ZIPs or states inside the repository
+# 31. I accidentally created raw logs, ZIPs or states inside the repository
 
 The current `.gitignore` excludes common local/runtime artifacts such as:
 
@@ -742,7 +724,7 @@ Review the file before deciding how to remove it.
 
 ---
 
-# 33. What should I include in a bug report?
+# 32. What should I include in a bug report?
 
 Useful:
 
@@ -752,7 +734,6 @@ commit SHA:
 Python version:
 operating system:
 ebusd installation: Docker / native / other
-adapter connection: USB / network / ens / enh / mDNS / unknown
 ebusd version if known:
 command that failed:
 exact error:
@@ -770,7 +751,7 @@ Avoid:
 
 ---
 
-# 34. Safe diagnostic command block
+# 33. Safe diagnostic command block
 
 For a typical Linux installation, this produces a useful first diagnostic without active eBUS access:
 
@@ -778,7 +759,7 @@ For a typical Linux installation, this produces a useful first diagnostic withou
 set -u
 
 echo "=== SYSTEM ==="
-uname -a
+uname -srm
 python3 --version
 git --version
 
@@ -792,11 +773,11 @@ ebus-evidence doctor || true
 
 echo
 echo "=== DOCKER EBUSd ==="
-docker ps --format 'table {{.Names}}\t{{.Image}}' 2>/dev/null | grep -i ebusd || true
+docker ps --format '{{.Image}}' 2>/dev/null | grep -i ebusd || true
 
 echo
 echo "=== SYSTEMD EBUSd ==="
-systemctl status ebusd --no-pager 2>/dev/null || true
+systemctl is-active ebusd 2>/dev/null || true
 ```
 
 Review all output before posting it publicly.
