@@ -7,6 +7,7 @@ name = "ebus-evidence"
 version = "0.1.0.dev0"
 description = "Deterministic read-only evidence extraction from ebusd raw logs"
 readme = "README.md"
+license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
   "PyYAML>=6.0",

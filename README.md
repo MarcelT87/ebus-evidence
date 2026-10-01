@@ -1,8 +1,8 @@
 # ebus-evidence
 
-`ebus-evidence` is a small, deterministic tool for extracting reproducible evidence from existing ebusd raw logs.
+`ebus-evidence` is a small, deterministic companion tool for extracting reproducible evidence from raw logs produced by [ebusd](https://github.com/john30/ebusd).
 
-It is designed for cross-installation comparisons during eBUS reverse engineering.
+It is designed for cross-installation comparisons during eBUS reverse engineering. The current development line intentionally focuses on **ebusd as the supported data source**.
 
 ## What it does
 
@@ -20,7 +20,19 @@ It does **not** connect to the eBUS adapter, send eBUS commands, write parameter
 
 Early development preview (`0.1.0.dev0`).
 
-The first version intentionally supports offline raw-log analysis only. Live watching, MQTT enrichment, Docker and an installer can be added after the core parser/profile/report path is stable.
+The first versions intentionally target **ebusd message-mode raw logs only**. This keeps installation, diagnostics and evidence collection predictable while the core is still being developed.
+
+Live watching, automatic ebusd discovery, MQTT enrichment, Docker packaging and an installer can be added after the core parser/profile/report path is stable.
+
+## Relationship to ebusd
+
+[ebusd](https://github.com/john30/ebusd) is the eBUS daemon maintained by **John30 and contributors**. It handles the actual communication with eBUS hardware and can create the raw message logs that `ebus-evidence` analyzes.
+
+`ebus-evidence` is an **independent community project**. It is not part of ebusd and is not presented as an official ebusd component or as being endorsed by the ebusd maintainers.
+
+This repository does not bundle or redistribute ebusd. It only reads log files produced by it and documents the ebusd options needed for interoperability.
+
+ebusd is distributed under the **GNU General Public License v3.0**; see the license and documentation in the upstream [john30/ebusd repository](https://github.com/john30/ebusd).
 
 ## Requirements
 
@@ -50,7 +62,7 @@ On Windows PowerShell, activate the environment with:
 
 ## Getting an ebusd raw log
 
-`ebus-evidence` needs an ebusd **message-mode raw log**.
+`ebus-evidence` needs an ebusd **message-mode raw log**. If you do not have ebusd yet, start with the upstream [ebusd project and installation documentation](https://github.com/john30/ebusd).
 
 If you already have a file containing timestamped lines with `<...` or `>...`, you can use it directly.
 
@@ -236,11 +248,19 @@ The tests use small synthetic raw-log fixtures. They do not require a running eb
 
 Once the offline core is stable:
 
-1. continuous read-only watch mode
-2. optional device metadata
-3. optional MQTT subscription for correlation context
-4. Docker image / Compose example
-5. native Linux installer and systemd service
-6. compact anonymizable evidence bundles for sharing
+1. automatic read-only ebusd discovery (`doctor`)
+2. continuous read-only watch mode
+3. optional ebusd device metadata
+4. optional MQTT subscription for correlation context
+5. Docker image / Compose example
+6. native Linux installer and systemd service
+7. compact anonymizable evidence bundles for sharing
 
 The raw-log analyzer remains the common core for all installation types.
+
+
+## License
+
+`ebus-evidence` is released under the MIT License. See [LICENSE](LICENSE).
+
+The ebusd project is separate software with its own GPL-3.0 license.
