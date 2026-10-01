@@ -6,7 +6,7 @@ You do not need Home Assistant, MQTT, Proxmox, or an analyzer database.
 
 `ebus-evidence` does not talk to the eBUS adapter and does not send eBUS commands. It reads a raw log that is already written by normal `ebusd`.
 
-If you need help understanding the difference between Docker/native ebusd, USB/network adapters, `ens:`/`enh:`, mDNS, remote hosts, or the ebusd TCP client port, see [ebusd setup matrix](EBUSD_SETUPS.md).
+If you need help understanding Docker, native/systemd or remote ebusd installations, see [ebusd setup matrix](EBUSD_SETUPS.md).
 
 ---
 
@@ -21,7 +21,7 @@ Examples:
 - Docker Compose
 - `docker run john30/ebusd ...`
 
-This is supported. The adapter itself may be USB, serial, TCP, UDP, `ens:`, `enh:`, or discovered by ebusd. For `ebus-evidence`, that transport does not matter as long as ebusd writes a message-mode raw log.
+This is supported. How ebusd reaches the eBUS hardware does not matter to `ebus-evidence` as long as ebusd writes a message-mode raw log.
 
 ### B. Normal ebusd installed directly on Linux
 
@@ -96,7 +96,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 python -m pip install --upgrade pip
-pip install -e .
+python -m pip install -e .
 ```
 
 Check the installation:
@@ -428,7 +428,7 @@ From the repository directory:
 ```bash
 source .venv/bin/activate
 git pull --ff-only
-pip install -e .
+python -m pip install -e .
 ```
 
 Then run:
