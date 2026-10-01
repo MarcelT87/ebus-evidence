@@ -1,3 +1,4 @@
+# Python
 .venv/
 __pycache__/
 *.py[cod]
@@ -5,5 +6,36 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Local/private working areas
+_private/
+private/
+internal/
+notes/
+local/
+
+# Runtime and evidence data
+data/
+contexts/
 *.json
 !tests/fixtures/*.json
+*.raw
+*.raw.old
+!tests/fixtures/*.raw
+*.zip
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.tmp
+
+# Environment / credentials
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
