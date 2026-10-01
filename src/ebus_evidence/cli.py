@@ -303,6 +303,11 @@ def _watch(args: argparse.Namespace) -> int:
         return 2
     if state_store is not None:
         print(f"State flush interval: {args.state_flush_interval:g} seconds")
+    if args.context_dir:
+        context_checks = sum(
+            1 for check in profile["checks"] if isinstance(check.get("context"), dict)
+        )
+        print(f"Context capture: {args.context_dir} ({context_checks} profile triggers)")
     print()
 
     try:
@@ -316,6 +321,7 @@ def _watch(args: argparse.Namespace) -> int:
             json_lines=args.json_lines,
             state_store=state_store,
             state_flush_interval=args.state_flush_interval,
+            context_dir=args.context_dir,
         )
     except ResumeError as exc:
         print(f"error: cannot resume watch safely: {exc}", file=sys.stderr)
@@ -335,6 +341,7 @@ def _watch(args: argparse.Namespace) -> int:
         f"Watch summary: frames={stats.frames} matches={stats.matches} "
         f"non_frames={stats.non_frame_records} skipped={stats.skipped_records} "
         f"partial_tail={stats.partial_tail} rotations={stats.rotations} "
+        f"context_triggers={stats.context_triggers} contexts={stats.context_captures} "
         f"resume={stats.resume_mode}"
     )
     if stats.non_frame_kinds:
@@ -455,6 +462,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=5.0,
         help="seconds between atomic state/checkpoint writes (default: 5)",
+    )
+    watch.add_argument(
+        "--context-dir",
+        help="optional directory for profile-triggered raw context bundles",
     )
     _add_time_arguments(watch)
     watch.set_defaults(func=_watch)
