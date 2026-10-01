@@ -99,3 +99,40 @@ def test_watch_context_directory_defaults_to_none():
         ["watch", "--profile", "hw5103-open-evidence"]
     )
     assert args.context_dir is None
+
+
+def test_bundle_accepts_state_context_and_output():
+    args = build_parser().parse_args(
+        [
+            "bundle",
+            "--profile",
+            "hw5103-open-evidence",
+            "--state",
+            "/tmp/state.json",
+            "--context-dir",
+            "/tmp/contexts",
+            "--output",
+            "/tmp/evidence.zip",
+        ]
+    )
+    assert args.profile == "hw5103-open-evidence"
+    assert args.state == "/tmp/state.json"
+    assert args.context_dir == "/tmp/contexts"
+    assert args.output == "/tmp/evidence.zip"
+    assert args.no_context_raw is False
+
+
+def test_bundle_can_disable_context_raw():
+    args = build_parser().parse_args(
+        [
+            "bundle",
+            "--profile",
+            "hw5103-open-evidence",
+            "--context-dir",
+            "/tmp/contexts",
+            "--no-context-raw",
+            "--output",
+            "/tmp/evidence.zip",
+        ]
+    )
+    assert args.no_context_raw is True
