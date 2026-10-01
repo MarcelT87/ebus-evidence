@@ -59,3 +59,23 @@ def test_watch_accepts_checkpoint_reset_flag():
     )
     assert args.state == "/tmp/evidence-state.json"
     assert args.reset_checkpoint is True
+
+
+def test_watch_state_flush_interval_defaults_to_five_seconds():
+    args = build_parser().parse_args(
+        ["watch", "--profile", "hw5103-open-evidence"]
+    )
+    assert args.state_flush_interval == 5.0
+
+
+def test_watch_accepts_custom_state_flush_interval():
+    args = build_parser().parse_args(
+        [
+            "watch",
+            "--profile",
+            "hw5103-open-evidence",
+            "--state-flush-interval",
+            "12.5",
+        ]
+    )
+    assert args.state_flush_interval == 12.5
