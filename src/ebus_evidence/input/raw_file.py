@@ -43,8 +43,24 @@ def unescape_wire(data: bytes) -> bytes:
     return bytes(out)
 
 
+def resolve_raw_sources(path: str | Path, include_rotated: bool = False) -> list[Path]:
+    """Return raw sources in chronological order.
+
+    ebusd rotates FILE to FILE.old. When requested, the rotated file is read
+    first and the active file second.
+    """
+    active = Path(path)
+    sources: list[Path] = []
+    if include_rotated:
+        rotated = Path(str(active) + ".old")
+        if rotated.is_file():
+            sources.append(rotated)
+    sources.append(active)
+    return sources
+
+
 def split_records(path: str | Path, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
-    """Yield complete timestamp-delimited records from a closed raw-log file."""
+    """Yield timestamp-delimited records from a raw-log file."""
     buffer = b""
     with Path(path).open("rb") as handle:
         while chunk := handle.read(chunk_size):
@@ -150,3 +166,8 @@ def iter_frames(path: str | Path) -> Iterator[Frame]:
             yield parse_record(record)
         except RawParseError:
             continue
+
+
+def iter_frames_many(paths: list[str | Path]) -> Iterator[Frame]:
+    for path in paths:
+        yield from iter_frames(path)

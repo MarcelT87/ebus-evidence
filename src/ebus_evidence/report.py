@@ -20,6 +20,8 @@ def _new_state(check: dict[str, Any]) -> dict[str, Any]:
         "first": None,
         "last": None,
         "response_variants": Counter(),
+        "response_first": {},
+        "response_last": {},
         "decoded": 0,
         "no_response": 0,
         "decode_errors": 0,
@@ -45,7 +47,11 @@ def analyze_frames(frames: Iterable[Frame], profile: dict[str, Any]) -> dict[str
             state["matches"] += 1
             state["first"] = state["first"] or frame.timestamp
             state["last"] = frame.timestamp
-            state["response_variants"][frame.response or "<none>"] += 1
+
+            response_key = frame.response or "<none>"
+            state["response_variants"][response_key] += 1
+            state["response_first"].setdefault(response_key, frame.timestamp)
+            state["response_last"][response_key] = frame.timestamp
 
             value_spec = check.get("value")
             if value_spec is None:
@@ -85,7 +91,12 @@ def analyze_frames(frames: Iterable[Frame], profile: dict[str, Any]) -> dict[str
                 "last": state["last"],
                 "response_variant_count": len(state["response_variants"]),
                 "top_responses": [
-                    {"response": response, "count": count}
+                    {
+                        "response": response,
+                        "count": count,
+                        "first_seen": state["response_first"][response],
+                        "last_seen": state["response_last"][response],
+                    }
                     for response, count in top_responses
                 ],
                 "decoded": state["decoded"],
@@ -113,14 +124,22 @@ def format_text(report: dict[str, Any]) -> str:
         "eBUS Evidence",
         f"Profile: {report['profile']} (v{report['profile_version']})",
         f"Parsed frames: {report['total_frames']}",
-        "",
     ]
+    source_files = report.get("source_files", [])
+    if source_files:
+        lines.append(f"Raw sources: {', '.join(source_files)}")
+    lines.append("")
+
     for check in report["checks"]:
         lines.append(f"[{check['id']}] {check['description']}")
         lines.append(f"  matches: {check['matches']}")
         lines.append(f"  response variants: {check['response_variant_count']}")
         for item in check["top_responses"][:5]:
-            lines.append(f"    {item['count']:>7}  {item['response']}")
+            if item["first_seen"] == item["last_seen"]:
+                seen = f" @ {item['first_seen']}"
+            else:
+                seen = f"  {item['first_seen']} -> {item['last_seen']}"
+            lines.append(f"    {item['count']:>7}  {item['response']}{seen}")
         if check["decoded"] or check["no_response"] or check["decode_errors"]:
             lines.append(
                 f"  decoded: {check['decoded']} "

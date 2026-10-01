@@ -23,6 +23,9 @@ def test_profile_report_from_raw_fixture():
     assert checks["hmu_a80e_nonzero"]["maximum"] == 5.5
     assert checks["vwzio_b512_states"]["matches"] == 2
     assert checks["vwzio_b512_states"]["distinct_values"] == [0, 5]
+    response = checks["hmu_a80e_nonzero"]["top_responses"][0]
+    assert response["first_seen"] == "2026-10-01 10:00:00.000"
+    assert response["last_seen"] == "2026-10-01 10:00:00.000"
 
 
 def test_missing_response_is_not_a_decode_error():
@@ -54,6 +57,8 @@ def test_missing_response_is_not_a_decode_error():
     assert check["decoded"] == 0
     assert check["no_response"] == 1
     assert check["decode_errors"] == 0
+    assert check["top_responses"][0]["first_seen"] == frame.timestamp
     text = format_text(report)
     assert "<none>" in text
     assert "no response: 1" in text
+    assert frame.timestamp in text

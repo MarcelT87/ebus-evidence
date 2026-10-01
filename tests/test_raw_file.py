@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from ebus_evidence.input.raw_file import parse_record, split_records, unescape_wire
+from ebus_evidence.input.raw_file import (
+    parse_record,
+    resolve_raw_sources,
+    split_records,
+    unescape_wire,
+)
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample.raw"
@@ -30,3 +35,13 @@ def test_parser_extracts_passive_response():
 def test_split_records_reads_complete_closed_file():
     records = list(split_records(FIXTURE, chunk_size=17))
     assert len(records) == 5
+
+
+def test_rotated_source_is_ordered_before_active(tmp_path):
+    active = tmp_path / "ebusd.raw"
+    rotated = tmp_path / "ebusd.raw.old"
+    active.write_text("active", encoding="ascii")
+    rotated.write_text("old", encoding="ascii")
+
+    assert resolve_raw_sources(active, include_rotated=True) == [rotated, active]
+    assert resolve_raw_sources(active, include_rotated=False) == [active]

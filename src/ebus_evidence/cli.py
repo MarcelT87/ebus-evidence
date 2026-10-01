@@ -6,21 +6,41 @@ import sys
 from pathlib import Path
 
 from ebus_evidence import __version__
-from ebus_evidence.input.raw_file import RawParseError, iter_frames, parse_record, split_records
+from ebus_evidence.input.raw_file import (
+    RawParseError,
+    iter_frames_many,
+    parse_record,
+    resolve_raw_sources,
+    split_records,
+)
 from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.report import analyze_frames, format_text
 
 
-def _doctor(args: argparse.Namespace) -> int:
+def _resolve_sources(args: argparse.Namespace) -> list[Path]:
     raw = Path(args.raw)
+    if not raw.is_file():
+        raise FileNotFoundError(raw)
+    return resolve_raw_sources(raw, include_rotated=bool(args.include_rotated))
+
+
+def _doctor(args: argparse.Namespace) -> int:
     profile_path = Path(args.profile)
     print(f"eBUS Evidence {__version__}")
     print()
 
-    if not raw.is_file():
-        print(f"Raw file ............. ERROR ({raw})")
+    try:
+        sources = _resolve_sources(args)
+    except FileNotFoundError as exc:
+        print(f"Raw file ............. ERROR ({exc})")
         return 2
-    print(f"Raw file ............. OK ({raw})")
+
+    print(f"Raw file ............. OK ({sources[-1]})")
+    if args.include_rotated:
+        if len(sources) > 1:
+            print(f"Rotated raw .......... OK ({sources[0]})")
+        else:
+            print("Rotated raw .......... not present")
 
     try:
         profile = load_profile(profile_path)
@@ -29,23 +49,27 @@ def _doctor(args: argparse.Namespace) -> int:
         return 2
     print(f"Profile .............. OK ({profile['name']})")
 
-    parsed = False
-    parse_error = None
-    try:
-        for record in split_records(raw):
-            try:
-                parse_record(record)
-                parsed = True
-                break
-            except RawParseError as exc:
-                parse_error = str(exc)
-    except OSError as exc:
-        print(f"Raw format ........... ERROR ({exc})")
-        return 2
+    for source in sources:
+        parsed = False
+        parse_error = None
+        try:
+            for record in split_records(source):
+                try:
+                    parse_record(record)
+                    parsed = True
+                    break
+                except RawParseError as exc:
+                    parse_error = str(exc)
+        except OSError as exc:
+            print(f"Raw format ........... ERROR ({source}: {exc})")
+            return 2
+        if not parsed:
+            print(
+                f"Raw format ........... ERROR "
+                f"({source}: {parse_error or 'no complete records found'})"
+            )
+            return 2
 
-    if not parsed:
-        print(f"Raw format ........... ERROR ({parse_error or 'no complete records found'})")
-        return 2
     print("Raw format ........... OK")
     print()
     print("No eBUS adapter access.")
@@ -63,12 +87,14 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    raw = Path(args.raw)
-    if not raw.is_file():
-        print(f"error: raw file not found: {raw}", file=sys.stderr)
+    try:
+        sources = _resolve_sources(args)
+    except FileNotFoundError as exc:
+        print(f"error: raw file not found: {exc}", file=sys.stderr)
         return 2
 
-    report = analyze_frames(iter_frames(raw), profile)
+    report = analyze_frames(iter_frames_many(sources), profile)
+    report["source_files"] = [source.name for source in sources]
     print(format_text(report), end="")
 
     if args.json:
@@ -76,6 +102,16 @@ def _analyze(args: argparse.Namespace) -> int:
         output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"JSON report: {output}")
     return 0
+
+
+def _add_raw_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--raw", required=True, help="path to an ebusd message-mode raw log")
+    parser.add_argument(
+        "--include-rotated",
+        action="store_true",
+        help="also read the sibling FILE.old before the active raw log when present",
+    )
+    parser.add_argument("--profile", required=True, help="path to a YAML evidence profile")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -87,13 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     doctor = subparsers.add_parser("doctor", help="check raw log and profile")
-    doctor.add_argument("--raw", required=True, help="path to an ebusd message-mode raw log")
-    doctor.add_argument("--profile", required=True, help="path to a YAML evidence profile")
+    _add_raw_arguments(doctor)
     doctor.set_defaults(func=_doctor)
 
     analyze = subparsers.add_parser("analyze", help="analyze an existing raw log")
-    analyze.add_argument("--raw", required=True, help="path to an ebusd message-mode raw log")
-    analyze.add_argument("--profile", required=True, help="path to a YAML evidence profile")
+    _add_raw_arguments(analyze)
     analyze.add_argument("--json", help="optional JSON output path")
     analyze.set_defaults(func=_analyze)
     return parser

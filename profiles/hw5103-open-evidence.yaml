@@ -1,5 +1,5 @@
 name: hw5103-open-evidence
-version: 1
+version: 2
 description: Small passive discriminator set for currently parked HW5103/VWZIO research paths.
 
 checks:
@@ -16,12 +16,16 @@ checks:
       offset: 5
 
   - id: hmu_ba08_variants
-    description: HMU B509 /ba08 response variants
+    description: HMU B509 /ba08 response values
     match:
       source: "f1"
       target: "08"
       pbsb: "b509"
       request: "05540200ba08"
+    value:
+      from: response
+      type: u8
+      offset: 5
 
   - id: vwzio_3538_variants
     description: VWZIO B51A /3538 typed response variants

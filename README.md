@@ -66,6 +66,15 @@ ebus-evidence analyze \
   --profile profiles/hw5103-open-evidence.yaml
 ```
 
+If ebusd also has a rotated `ebusd.raw.old`, include it in the same chronological analysis:
+
+```bash
+ebus-evidence analyze \
+  --raw /path/to/ebusd.raw \
+  --include-rotated \
+  --profile profiles/hw5103-open-evidence.yaml
+```
+
 Write the machine-readable report as JSON as well:
 
 ```bash
@@ -82,6 +91,8 @@ ebus-evidence analyze \
 If raw logging is not enabled yet, configure it in ebusd first and verify that the file is being written before running this tool.
 
 The parser understands the timestamped `<...` / `>...` message-mode records produced by ebusd and performs eBUS byte unescaping before interpreting request lengths.
+
+ebusd commonly rotates `FILE` to `FILE.old`. The optional `--include-rotated` flag reads `FILE.old` first and the active `FILE` second, so evidence does not disappear merely because the raw log rotated.
 
 ## Profiles
 
