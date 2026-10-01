@@ -35,12 +35,7 @@ def _read_profile_text(path_or_name: str | Path) -> str:
         raise ProfileError(f"cannot read bundled profile {value}: {exc}") from exc
 
 
-def load_profile(path_or_name: str | Path) -> dict[str, Any]:
-    try:
-        data = yaml.safe_load(_read_profile_text(path_or_name))
-    except yaml.YAMLError as exc:
-        raise ProfileError(f"cannot parse profile: {exc}") from exc
-
+def validate_profile_data(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ProfileError("profile root must be a mapping")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
@@ -93,3 +88,11 @@ def load_profile(path_or_name: str | Path) -> dict[str, Any]:
                     )
 
     return data
+
+
+def load_profile(path_or_name: str | Path) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(_read_profile_text(path_or_name))
+    except yaml.YAMLError as exc:
+        raise ProfileError(f"cannot parse profile: {exc}") from exc
+    return validate_profile_data(data)
