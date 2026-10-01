@@ -153,6 +153,11 @@ def test_bundle_is_deterministic_and_checksums_verify(tmp_path):
         assert manifest["privacy"]["absolute_paths_included"] is False
         assert manifest["privacy"]["resume_checkpoint_included"] is False
         assert manifest["privacy"]["full_raw_log_included"] is False
+        assert (
+            manifest["privacy"]["context_raw_may_contain_device_specific_bus_data"]
+            is True
+        )
+        assert manifest["privacy"]["review_context_raw_before_public_sharing"] is True
 
         shared = json.loads(archive.read("evidence/state.json"))
         assert shared["total_events"] == 1
@@ -198,3 +203,15 @@ def test_bundle_rejects_missing_explicit_state(tmp_path):
 def test_bundle_requires_some_evidence_source(tmp_path):
     with pytest.raises(BundleError, match="requires --state, --context-dir, or both"):
         create_bundle(tmp_path / "bundle.zip", PROFILE)
+
+
+def test_context_only_empty_directory_is_rejected(tmp_path):
+    context_dir = tmp_path / "contexts"
+    context_dir.mkdir()
+
+    with pytest.raises(BundleError, match="no evidence found"):
+        create_bundle(
+            tmp_path / "bundle.zip",
+            PROFILE,
+            context_dir=context_dir,
+        )
