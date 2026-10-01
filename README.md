@@ -327,6 +327,49 @@ context:
 
 Context conditions are deterministic comparisons against already decoded evidence values or raw response strings. They do not perform semantic inference or confidence scoring.
 
+### Shareable evidence bundles
+
+A compact deterministic ZIP can be created from an existing evidence state, context captures, or both:
+
+```bash
+ebus-evidence bundle \
+  --profile hw5103-open-evidence \
+  --state evidence-state.json \
+  --context-dir contexts \
+  --output hw5103-evidence.zip
+```
+
+The archive contains a canonical profile copy, a manifest, SHA-256 checksums, the **shareable evidence subset** of the state, and optional context files.
+
+The exported state deliberately omits local resume details such as:
+
+```text
+device
+inode
+offset
+anchor_start
+anchor_sha256
+```
+
+It also does not add absolute filesystem paths, hostnames, IP addresses, environment variables or credentials.
+
+By default the small context `.raw` windows are included because they are the strongest reproducible protocol evidence. Raw eBUS payloads can still contain device-specific bus data, so review them before public sharing.
+
+For aggregate/context metadata only:
+
+```bash
+ebus-evidence bundle \
+  --profile hw5103-open-evidence \
+  --state evidence-state.json \
+  --context-dir contexts \
+  --no-context-raw \
+  --output hw5103-evidence-metadata.zip
+```
+
+Bundle creation is deterministic: member ordering, JSON/YAML serialization and ZIP timestamps are fixed. The same inputs therefore produce the same archive bytes and SHA-256 on the same implementation.
+
+The bundle contains only selected evidence material. It never embeds the complete long-running ebusd raw log.
+
 ## Raw logging
 
 `ebus-evidence` expects an **existing ebusd message-mode raw log**. It does not modify the ebusd configuration for you.
@@ -388,13 +431,12 @@ The tests use small synthetic raw-log fixtures. They do not require a running eb
 
 Once the offline core is stable:
 
-1. harden context bundles and evidence export for cross-installation sharing
-2. real-world native/systemd discovery validation
-3. optional read-only ebusd device metadata
-4. optional MQTT subscription for correlation context
-5. Docker image / Compose example
-6. native Linux installer and systemd service
-7. compact anonymizable evidence bundles for sharing
+1. real-world native/systemd discovery validation
+2. optional read-only ebusd device metadata
+3. optional MQTT subscription for correlation context
+4. Docker image / Compose example
+5. native Linux installer and systemd service
+6. harden cross-installation evidence bundle workflows
 
 The raw-log analyzer remains the common core for all installation types.
 
