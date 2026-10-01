@@ -309,6 +309,7 @@ def _watch(args: argparse.Namespace) -> int:
             poll_interval=args.poll_interval,
             json_lines=args.json_lines,
             state_store=state_store,
+            state_flush_interval=args.state_flush_interval,
         )
     except ResumeError as exc:
         print(f"error: cannot resume watch safely: {exc}", file=sys.stderr)
@@ -442,6 +443,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--reset-checkpoint",
         action="store_true",
         help="acknowledge a continuity gap, clear a stale checkpoint, and start at the current raw-log end",
+    )
+    watch.add_argument(
+        "--state-flush-interval",
+        type=float,
+        default=5.0,
+        help="seconds between atomic state/checkpoint writes (default: 5)",
     )
     _add_time_arguments(watch)
     watch.set_defaults(func=_watch)
