@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from ebus_evidence.decoders import DecodeError, decode_value
-from ebus_evidence.input.raw_file import RawParseError, parse_record, split_record_buffer
+from ebus_evidence.input.raw_file import RawNonFrame, RawParseError, parse_record, split_record_buffer
 from ebus_evidence.matching import frame_matches
 from ebus_evidence.models import Frame
 from ebus_evidence.timeutil import normalize_timestamp
@@ -23,6 +23,10 @@ class WatchStats:
     skipped_records: int = 0
     partial_tail: int = 0
     rotations: int = 0
+    non_frame_records: int = 0
+    non_frame_kinds: Counter[str] = field(default_factory=Counter)
+    non_frame_samples: dict[str, list[str]] = field(default_factory=dict)
+    skipped_records: int = 0
     skip_reasons: Counter[str] = field(default_factory=Counter)
     skip_samples: dict[str, list[str]] = field(default_factory=dict)
 
@@ -190,6 +194,16 @@ def run_watch(
         for record in records:
             try:
                 frame = parse_record(record)
+            except RawNonFrame as exc:
+                stats.non_frame_records += 1
+                stats.non_frame_kinds[exc.kind] += 1
+                samples = stats.non_frame_samples.setdefault(exc.kind, [])
+                if len(samples) < 3:
+                    text = record.decode("ascii", "replace").strip().replace("\n", "\\n")
+                    if len(text) > 160:
+                        text = text[:157] + "..."
+                    samples.append(f"bytes={len(record)} record={text}")
+                continue
             except RawParseError as exc:
                 reason = str(exc)
                 stats.skipped_records += 1
