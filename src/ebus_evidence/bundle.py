@@ -222,12 +222,21 @@ def create_bundle(
 
 
 
-def _json_member(archive: zipfile.ZipFile, name: str) -> Any:
+def _read_member(archive: zipfile.ZipFile, name: str) -> bytes:
     try:
-        return json.loads(archive.read(name).decode("utf-8"))
+        return archive.read(name)
     except KeyError as exc:
         raise BundleError(f"missing required bundle member: {name}") from exc
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+        raise BundleError(f"cannot read bundle member {name}: {exc}") from exc
+
+
+def _json_member(archive: zipfile.ZipFile, name: str) -> Any:
+    try:
+        return json.loads(_read_member(archive, name).decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise BundleError(f"invalid UTF-8 in {name}: {exc}") from exc
+    except json.JSONDecodeError as exc:
         raise BundleError(f"invalid JSON in {name}: {exc}") from exc
 
 
@@ -327,7 +336,7 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
                 or any(ch not in "0123456789abcdef" for ch in expected)
             ):
                 raise BundleError(f"invalid SHA-256 digest for {name}")
-            actual = hashlib.sha256(archive.read(name)).hexdigest()
+            actual = hashlib.sha256(_read_member(archive, name)).hexdigest()
             if actual != expected:
                 raise BundleError(f"checksum mismatch for {name}")
 
@@ -342,7 +351,7 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
             raise BundleError("manifest requires integer profile_version")
 
         try:
-            profile_data = yaml.safe_load(archive.read("profile.yaml").decode("utf-8"))
+            profile_data = yaml.safe_load(_read_member(archive, "profile.yaml").decode("utf-8"))
             profile = validate_profile_data(profile_data)
         except (UnicodeDecodeError, yaml.YAMLError, ProfileError) as exc:
             raise BundleError(f"invalid profile.yaml: {exc}") from exc
