@@ -332,6 +332,7 @@ def run_watch(
     poll_interval: float = 0.25,
     json_lines: bool = False,
     state_store: EvidenceStateStore | None = None,
+    state_flush_interval: float = 5.0,
 ) -> WatchStats:
     follower = RawLogFollower(
         raw_path,
@@ -339,18 +340,46 @@ def run_watch(
     )
     follower.start()
 
+    if state_flush_interval <= 0:
+        raise ValueError("state_flush_interval must be greater than zero")
+
     stats = WatchStats(resume_mode=follower.resume_mode)
     started = time.monotonic()
+    last_state_flush = started
+    state_dirty = False
 
     if state_store is not None and state_store.checkpoint is None:
+        # Persist the initial cursor immediately so even an early crash cannot
+        # silently turn the next run into another fresh-end start.
         state_store.set_checkpoint(follower.checkpoint())
+        last_state_flush = time.monotonic()
+
+    def stage_checkpoint(checkpoint: dict[str, Any]) -> None:
+        nonlocal state_dirty
+        if state_store is not None:
+            if state_store.set_checkpoint(checkpoint, save=False):
+                state_dirty = True
+
+    def flush_state(*, force: bool = False) -> None:
+        nonlocal state_dirty, last_state_flush
+        if state_store is None or not state_dirty:
+            return
+        now = time.monotonic()
+        if not force and now - last_state_flush < state_flush_interval:
+            return
+        state_store.save()
+        state_dirty = False
+        last_state_flush = now
 
     def add_event(event: dict[str, Any]) -> None:
+        nonlocal state_dirty
         stats.matches += 1
         if state_store is not None:
-            # Persist events and the file cursor in one atomic state write after
-            # the current raw batch has been consumed.
+            # Evidence and the matching file cursor are staged in memory and
+            # flushed together, keeping the persisted state internally
+            # consistent while avoiding an fsync for every raw-log poll.
             state_store.add(event, save=False)
+            state_dirty = True
         if json_lines:
             print(json.dumps(event, sort_keys=True), flush=True)
         else:
@@ -395,8 +424,8 @@ def run_watch(
         while seconds is None or time.monotonic() - started < seconds:
             records = follower.poll()
             consume(records)
-            if state_store is not None:
-                state_store.set_checkpoint(follower.checkpoint())
+            stage_checkpoint(follower.checkpoint())
+            flush_state()
             time.sleep(poll_interval)
     except KeyboardInterrupt:
         pass
@@ -436,8 +465,8 @@ def run_watch(
         else:
             final_checkpoint = end_checkpoint
 
-        if state_store is not None:
-            state_store.set_checkpoint(final_checkpoint)
+        stage_checkpoint(final_checkpoint)
+        flush_state(force=True)
         stats.rotations = follower.rotations
 
     return stats
