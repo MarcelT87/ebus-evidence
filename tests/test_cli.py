@@ -79,3 +79,23 @@ def test_watch_accepts_custom_state_flush_interval():
         ]
     )
     assert args.state_flush_interval == 12.5
+
+
+def test_watch_accepts_context_directory():
+    args = build_parser().parse_args(
+        [
+            "watch",
+            "--profile",
+            "hw5103-open-evidence",
+            "--context-dir",
+            "/tmp/contexts",
+        ]
+    )
+    assert args.context_dir == "/tmp/contexts"
+
+
+def test_watch_context_directory_defaults_to_none():
+    args = build_parser().parse_args(
+        ["watch", "--profile", "hw5103-open-evidence"]
+    )
+    assert args.context_dir is None
