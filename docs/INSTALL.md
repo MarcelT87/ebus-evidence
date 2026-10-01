@@ -10,50 +10,77 @@ If you need help understanding Docker, native/systemd or remote ebusd installati
 
 ---
 
-## 1. First: which setup do you have?
+## 1. Before installing anything: where does ebusd run?
 
 Choose the closest option.
 
-### A. Normal ebusd in Docker
+### A. Home Assistant OS with an eBUSd App/Add-on
 
 Examples:
 
-- Docker Compose
-- `docker run john30/ebusd ...`
+- Home Assistant Green;
+- Home Assistant Yellow;
+- Home Assistant OS on Raspberry Pi;
+- Home Assistant OS in a VM.
 
-This is supported. How ebusd reaches the eBUS hardware does not matter to `ebus-evidence` as long as ebusd writes a message-mode raw log.
+Do **not** start with `git clone` on the Home Assistant OS host.
 
-### B. Normal ebusd installed directly on Linux
+Use the dedicated beginner path:
+
+**[Home Assistant](HOME_ASSISTANT.md)**
+
+The current recommended workflow is to let the eBUSd App write the message-mode raw log, then analyze that file on a normal computer.
+
+### B. ebusd in Docker on a Linux host
 
 Examples:
 
-- `ebusd.service`
-- systemd on Debian, Ubuntu, Raspberry Pi OS, etc.
+- Docker Compose;
+- `docker run john30/ebusd ...`;
+- Home Assistant Container on the same Linux host, with ebusd in another container.
 
-This is supported. Automatic discovery is implemented; real-world validation of more native installations is still useful.
+Install `ebus-evidence` on the **Linux Docker host**, not inside the ebusd container.
 
-### C. Normal ebusd runs on another computer
+Continue with [Requirements](#2-requirements).
 
-Offline analysis is supported.
+### C. ebusd installed directly on Linux
 
-Copy the raw log to the computer running `ebus-evidence`, or make it available through a read-only filesystem mount and use `--raw /path/to/ebusd.raw`.
+Examples:
 
-Automatic live following over the network is not implemented yet.
+- `ebusd.service`;
+- systemd on Debian, Ubuntu or Raspberry Pi OS;
+- ebusd started manually on a Linux machine.
 
-### D. I do not know
+Install `ebus-evidence` on that Linux machine.
 
-On Linux, try:
+Continue with [Requirements](#2-requirements).
+
+### D. ebusd runs on another computer
+
+You can install `ebus-evidence` on a different computer and analyze a copied or read-only mounted raw-log file.
+
+Continue with [Requirements](#2-requirements).
+
+### E. I use Home Assistant but I do not know which type
+
+Start with:
+
+**[Home Assistant](HOME_ASSISTANT.md#3-i-use-home-assistant-but-do-not-know-which-type)**
+
+### F. I do not know where ebusd runs
+
+On a normal Linux machine, try:
 
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Image}}' | grep -i ebusd
-systemctl status ebusd --no-pager
+systemctl is-active ebusd
 ```
 
-If the first command shows an ebusd container, use the Docker path below.
+- If the first command shows an ebusd container, use the Docker path.
+- If the second command prints `active`, use the native/systemd path.
+- If neither applies, ebusd may run on another computer or inside Home Assistant OS.
 
-If the second command shows an active `ebusd.service`, use the native/systemd path below.
-
-If neither applies, you can still use a known raw-log file manually.
+At this point, identify the ebusd host before installing anything.
 
 ---
 
