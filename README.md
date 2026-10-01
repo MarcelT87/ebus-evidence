@@ -180,13 +180,13 @@ The JSON report keeps the original raw timestamp and, when a source timezone is 
 
 ## Quick start
 
-On a Linux host running ebusd in Docker, try automatic read-only discovery first:
+On a Linux host running ebusd in Docker **or as a native systemd service**, try automatic read-only discovery first:
 
 ```bash
 ebus-evidence doctor
 ```
 
-The first discovery implementation reads the running ebusd process arguments and Docker mount metadata. It does **not** inspect or print the container environment, and it does not change ebusd.
+`doctor` reads only the running ebusd process arguments needed for raw-log detection. For Docker it additionally reads mount metadata so the container raw-log path can be mapped to its host path. For native systemd it reads the service's main PID and that process's command line. It does **not** inspect or print process/container environments, and it does not change ebusd.
 
 If automatic discovery is not available or your setup is unusual, use the manual raw-log path:
 
@@ -285,7 +285,7 @@ The tests use small synthetic raw-log fixtures. They do not require a running eb
 
 Once the offline core is stable:
 
-1. extend automatic read-only ebusd discovery from Docker to native/systemd
+1. harden automatic read-only ebusd discovery across real Docker and native/systemd installations
 2. continuous read-only watch mode
 3. optional ebusd device metadata
 4. optional MQTT subscription for correlation context

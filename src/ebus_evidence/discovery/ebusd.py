@@ -17,16 +17,18 @@ class DockerMount:
 @dataclass(frozen=True, slots=True)
 class EbusdDiscovery:
     installation: str
-    container_id: str
-    container_name: str
-    image: str
     command: tuple[str, ...]
     raw_enabled: bool
     raw_mode: str | None
-    raw_file_container: str | None
     raw_file_host: str | None
     raw_size_kb: int | None
-    mounts: tuple[DockerMount, ...]
+    container_id: str | None = None
+    container_name: str | None = None
+    image: str | None = None
+    raw_file_container: str | None = None
+    mounts: tuple[DockerMount, ...] = ()
+    service_name: str | None = None
+    pid: int | None = None
 
 
 class DiscoveryError(RuntimeError):
@@ -34,6 +36,7 @@ class DiscoveryError(RuntimeError):
 
 
 Runner = Callable[[list[str]], str]
+ProcReader = Callable[[int], list[str]]
 
 
 def _run_command(command: list[str]) -> str:
@@ -45,6 +48,11 @@ def _run_command(command: list[str]) -> str:
         text=True,
     )
     return completed.stdout
+
+
+def _read_proc_cmdline(pid: int) -> list[str]:
+    data = Path(f"/proc/{pid}/cmdline").read_bytes()
+    return [part.decode("utf-8", "replace") for part in data.split(b"\0") if part]
 
 
 def _parse_option(args: list[str], name: str) -> str | None:
@@ -104,7 +112,7 @@ def map_container_path_to_host(
     mounts: list[DockerMount] | tuple[DockerMount, ...],
 ) -> str | None:
     path = PurePosixPath(container_path)
-    best: tuple[int, DockerMount] | None = None
+    best: tuple[int, DockerMount, PurePosixPath] | None = None
 
     for mount in mounts:
         destination = PurePosixPath(mount.destination)
@@ -114,13 +122,12 @@ def map_container_path_to_host(
             continue
         score = len(destination.parts)
         if best is None or score > best[0]:
-            best = (score, mount)
-            best_relative = relative
+            best = (score, mount, relative)
 
     if best is None:
         return None
 
-    return str(Path(best[1].source).joinpath(*best_relative.parts))
+    return str(Path(best[1].source).joinpath(*best[2].parts))
 
 
 def _find_ebusd_command(top_output: str) -> list[str] | None:
@@ -204,3 +211,62 @@ def discover_docker_ebusd(runner: Runner = _run_command) -> EbusdDiscovery | Non
         )
 
     return None
+
+
+def discover_native_ebusd(
+    runner: Runner = _run_command,
+    proc_reader: ProcReader = _read_proc_cmdline,
+) -> EbusdDiscovery | None:
+    """Discover a running native systemd ebusd service without reading its environment."""
+    if shutil.which("systemctl") is None and runner is _run_command:
+        return None
+
+    try:
+        state = runner(
+            ["systemctl", "show", "ebusd.service", "--property=ActiveState", "--value"]
+        ).strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if state != "active":
+        return None
+
+    try:
+        pid_text = runner(
+            ["systemctl", "show", "ebusd.service", "--property=MainPID", "--value"]
+        ).strip()
+        pid = int(pid_text)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+    if pid <= 0:
+        return None
+
+    try:
+        command = proc_reader(pid)
+    except OSError:
+        return None
+
+    if not command or PurePosixPath(command[0]).name != "ebusd":
+        return None
+
+    parsed = parse_ebusd_command(command)
+    raw_file = parsed["raw_file"]
+
+    return EbusdDiscovery(
+        installation="systemd",
+        service_name="ebusd.service",
+        pid=pid,
+        command=tuple(command),
+        raw_enabled=bool(parsed["raw_enabled"]),
+        raw_mode=parsed["raw_mode"] if isinstance(parsed["raw_mode"], str) else None,
+        raw_file_host=str(raw_file) if raw_file is not None else None,
+        raw_size_kb=(
+            parsed["raw_size_kb"] if isinstance(parsed["raw_size_kb"], int) else None
+        ),
+    )
+
+
+def discover_ebusd() -> EbusdDiscovery | None:
+    """Discover supported ebusd installations in preferred order."""
+    return discover_docker_ebusd() or discover_native_ebusd()

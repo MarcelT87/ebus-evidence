@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from ebus_evidence import __version__
-from ebus_evidence.discovery.ebusd import EbusdDiscovery, discover_docker_ebusd
+from ebus_evidence.discovery.ebusd import EbusdDiscovery, discover_ebusd
 from ebus_evidence.input.raw_file import (
     RawParseError,
     iter_frames_many,
@@ -50,11 +50,17 @@ def _check_raw_sources(sources: list[Path]) -> tuple[bool, str | None]:
     return True, None
 
 
-def _print_docker_discovery(discovery: EbusdDiscovery) -> None:
+def _print_discovery(discovery: EbusdDiscovery) -> None:
     print("ebusd")
-    print("  detected ............ Docker")
-    print(f"  container ........... {discovery.container_name}")
-    print(f"  image ............... {discovery.image}")
+    if discovery.installation == "docker":
+        print("  detected ............ Docker")
+        print(f"  container ........... {discovery.container_name}")
+        print(f"  image ............... {discovery.image}")
+    else:
+        print("  detected ............ native/systemd")
+        print(f"  service ............. {discovery.service_name}")
+        print(f"  pid ................. {discovery.pid}")
+
     print()
     print("Raw logging")
     if not discovery.raw_enabled:
@@ -62,7 +68,10 @@ def _print_docker_discovery(discovery: EbusdDiscovery) -> None:
         print()
         print("Recommended ebusd options:")
         print("  --lograwdata")
-        print("  --lograwdatafile=/rawlog/ebusd.raw")
+        if discovery.installation == "docker":
+            print("  --lograwdatafile=/rawlog/ebusd.raw")
+        else:
+            print("  --lograwdatafile=/var/log/ebusd.raw")
         print("  --lograwdatasize=102400")
         print()
         print("No changes were made.")
@@ -73,7 +82,8 @@ def _print_docker_discovery(discovery: EbusdDiscovery) -> None:
     if discovery.raw_file_container:
         print(f"  container file ...... {discovery.raw_file_container}")
     if discovery.raw_file_host:
-        print(f"  host file ........... {discovery.raw_file_host}")
+        label = "host file" if discovery.installation == "docker" else "file"
+        print(f"  {label:<20} {discovery.raw_file_host}")
     elif discovery.raw_file_container:
         print("  host file ........... unresolved (no matching Docker mount)")
     if discovery.raw_size_kb is not None:
@@ -94,15 +104,15 @@ def _doctor(args: argparse.Namespace) -> int:
     raw_path = args.raw
 
     if raw_path is None:
-        discovered = discover_docker_ebusd()
+        discovered = discover_ebusd()
         if discovered is None:
             print("ebusd ................. not detected")
             print()
-            print("Automatic discovery currently supports running Docker ebusd containers.")
+            print("Automatic discovery currently supports Docker and native/systemd ebusd.")
             print("Use --raw /path/to/ebusd.raw for a manual check.")
             return 2
 
-        _print_docker_discovery(discovered)
+        _print_discovery(discovered)
 
         if not discovered.raw_enabled:
             return 2
@@ -113,8 +123,12 @@ def _doctor(args: argparse.Namespace) -> int:
             return 2
         if discovered.raw_file_host is None:
             print()
-            print("Raw file .............. ERROR (container path could not be mapped to host)")
-            print("Use --raw /host/path/to/ebusd.raw for a manual check.")
+            if discovered.installation == "docker":
+                print("Raw file .............. ERROR (container path could not be mapped to host)")
+                print("Use --raw /host/path/to/ebusd.raw for a manual check.")
+            else:
+                print("Raw file .............. ERROR (--lograwdatafile was not found)")
+                print("Configure an explicit raw-log file or use --raw manually.")
             return 2
 
         raw_path = discovered.raw_file_host
@@ -225,7 +239,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor.add_argument(
         "--raw",
-        help="manual path to an ebusd message-mode raw log; otherwise Docker ebusd is discovered",
+        help="manual path to an ebusd message-mode raw log; otherwise ebusd is discovered",
     )
     doctor.add_argument(
         "--include-rotated",
