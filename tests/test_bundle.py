@@ -292,3 +292,35 @@ def test_verify_allows_repacked_valid_bundle_but_flags_layout(tmp_path):
     verified = verify_bundle(repacked)
     assert verified["valid"] is True
     assert verified["deterministic_layout"] is False
+
+
+def test_bundle_rejects_context_raw_filename_traversal(tmp_path):
+    context_dir = tmp_path / "contexts"
+    context_dir.mkdir()
+    metadata = {
+        "format": "ebus-evidence-context-v1",
+        "profile": PROFILE["name"],
+        "profile_version": PROFILE["version"],
+        "check_id": "rare",
+        "description": "Rare evidence",
+        "before_seconds": 1,
+        "after_seconds": 1,
+        "pre_window_complete": True,
+        "post_window_complete": True,
+        "trigger_count": 1,
+        "triggers": [_event()],
+        "record_count": 1,
+        "raw_file": "..\\escape.raw",
+    }
+    (context_dir / "bad.json").write_text(
+        json.dumps(metadata),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BundleError, match="invalid raw_file"):
+        create_bundle(
+            tmp_path / "bundle.zip",
+            PROFILE,
+            context_dir=context_dir,
+            include_context_raw=False,
+        )
