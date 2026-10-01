@@ -134,7 +134,6 @@ You may have:
 - ebusd on another computer;
 - ebusd started manually;
 - an unusual container/service layout;
-- micro-ebusd instead of normal ebusd.
 
 If you already know the raw-log file path, bypass discovery:
 
@@ -690,19 +689,7 @@ See [ebusd setup matrix](EBUSD_SETUPS.md).
 
 ---
 
-# 31. I use micro-ebusd
-
-micro-ebusd is not yet a validated input source for `ebus-evidence`.
-
-Do not assume that a downloadable/raw micro-ebusd log is byte-for-byte identical to normal ebusd message mode.
-
-The project first needs a real sample and firmware information before declaring compatibility.
-
-A dedicated micro-ebusd status guide is planned.
-
----
-
-# 32. Tests fail after updating
+# 31. Tests fail after updating
 
 Activate the development environment and install development dependencies:
 
@@ -731,7 +718,7 @@ Do not include unrelated private configuration.
 
 ---
 
-# 33. I accidentally created raw logs, ZIPs or states inside the repository
+# 32. I accidentally created raw logs, ZIPs or states inside the repository
 
 The current `.gitignore` excludes common local/runtime artifacts such as:
 
@@ -755,7 +742,7 @@ Review the file before deciding how to remove it.
 
 ---
 
-# 34. What should I include in a bug report?
+# 33. What should I include in a bug report?
 
 Useful:
 
@@ -783,7 +770,7 @@ Avoid:
 
 ---
 
-# 35. Safe diagnostic command block
+# 34. Safe diagnostic command block
 
 For a typical Linux installation, this produces a useful first diagnostic without active eBUS access:
 
