@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -47,7 +48,7 @@ class RawLogFollower:
         self,
         path: str | Path,
         *,
-        checkpoint: dict[str, int] | None = None,
+        checkpoint: dict[str, Any] | None = None,
         from_start: bool = False,
     ):
         self.path = Path(path)
@@ -64,11 +65,59 @@ class RawLogFollower:
         return stat.st_dev, stat.st_ino
 
     @staticmethod
-    def _matches_checkpoint(stat: os.stat_result, checkpoint: dict[str, int]) -> bool:
+    def _identity_matches(stat: os.stat_result, checkpoint: dict[str, Any]) -> bool:
         return (
             stat.st_dev == checkpoint["device"]
             and stat.st_ino == checkpoint["inode"]
         )
+
+    @staticmethod
+    def _anchor_matches(
+        handle: BinaryIO,
+        checkpoint: dict[str, Any],
+    ) -> bool:
+        anchor_sha256 = checkpoint.get("anchor_sha256")
+        anchor_start = checkpoint.get("anchor_start")
+        if anchor_sha256 is None or anchor_start is None:
+            # Backward compatibility for state files written before content
+            # anchors were introduced. The next saved checkpoint will be
+            # upgraded automatically.
+            return True
+
+        offset = checkpoint["offset"]
+        current = handle.tell()
+        try:
+            handle.seek(anchor_start)
+            data = handle.read(offset - anchor_start)
+        finally:
+            handle.seek(current)
+        return hashlib.sha256(data).hexdigest() == anchor_sha256
+
+    def _try_open_checkpoint(
+        self,
+        path: Path,
+        checkpoint: dict[str, Any],
+    ) -> bool:
+        try:
+            handle = path.open("rb")
+        except FileNotFoundError:
+            return False
+
+        stat = os.fstat(handle.fileno())
+        if not self._identity_matches(stat, checkpoint):
+            handle.close()
+            return False
+        if checkpoint["offset"] > stat.st_size:
+            handle.close()
+            return False
+        if not self._anchor_matches(handle, checkpoint):
+            handle.close()
+            return False
+
+        handle.seek(checkpoint["offset"])
+        self._handle = handle
+        self._inode = self._identity(stat)
+        return True
 
     def _open_path(self, path: Path, *, offset: int | None = None, from_start: bool = False) -> None:
         handle = path.open("rb")
@@ -95,24 +144,12 @@ class RawLogFollower:
             self.resume_mode = "from_start" if self.from_start else "fresh_end"
             return
 
-        try:
-            active_stat = self.path.stat()
-        except FileNotFoundError as exc:
-            raise ResumeError(f"active raw log is missing: {self.path}") from exc
-
-        if self._matches_checkpoint(active_stat, checkpoint):
-            self._open_path(self.path, offset=checkpoint["offset"])
+        if self._try_open_checkpoint(self.path, checkpoint):
             self.resume_mode = "active"
             return
 
         rotated = Path(str(self.path) + ".old")
-        try:
-            rotated_stat = rotated.stat()
-        except FileNotFoundError:
-            rotated_stat = None
-
-        if rotated_stat is not None and self._matches_checkpoint(rotated_stat, checkpoint):
-            self._open_path(rotated, offset=checkpoint["offset"])
+        if self._try_open_checkpoint(rotated, checkpoint):
             self.resume_mode = "rotated"
             return
 
@@ -129,16 +166,28 @@ class RawLogFollower:
             return b""
         return self._handle.read()
 
-    def checkpoint(self, *, end: bool = False) -> dict[str, int]:
+    def checkpoint(self, *, end: bool = False) -> dict[str, Any]:
         if self._handle is None or self._inode is None:
             raise ResumeError("raw follower is not open")
-        offset = self._handle.tell()
+
+        current = self._handle.tell()
+        offset = current
         if not end:
             offset -= len(self._buffer)
+
+        anchor_start = max(0, offset - 256)
+        try:
+            self._handle.seek(anchor_start)
+            anchor = self._handle.read(offset - anchor_start)
+        finally:
+            self._handle.seek(current)
+
         return {
             "device": self._inode[0],
             "inode": self._inode[1],
             "offset": offset,
+            "anchor_start": anchor_start,
+            "anchor_sha256": hashlib.sha256(anchor).hexdigest(),
         }
 
     def poll(self) -> list[bytes]:
@@ -181,8 +230,8 @@ class RawLogFollower:
         list[bytes],
         bytes | None,
         bool,
-        dict[str, int],
-        dict[str, int],
+        dict[str, Any],
+        dict[str, Any],
     ]:
         """Close the file and return safe/end checkpoints around the final tail."""
         if self._handle is None:
