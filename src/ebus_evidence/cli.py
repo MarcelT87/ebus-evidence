@@ -297,6 +297,12 @@ def _watch(args: argparse.Namespace) -> int:
                 f"inode={state_store.checkpoint['inode']} "
                 f"offset={state_store.checkpoint['offset']}"
             )
+
+    if args.state_flush_interval <= 0:
+        print("error: --state-flush-interval must be greater than zero", file=sys.stderr)
+        return 2
+    if state_store is not None:
+        print(f"State flush interval: {args.state_flush_interval:g} seconds")
     print()
 
     try:
