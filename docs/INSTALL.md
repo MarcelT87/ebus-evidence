@@ -495,7 +495,7 @@ Common causes are:
 - an unusual ebusd installation that needs `--raw`;
 - a profile that simply does not match the installed devices.
 
-A dedicated troubleshooting guide will collect setup-specific failure cases as the project is tested on more independent installations.
+For symptom-based help, continue with [Troubleshooting](TROUBLESHOOTING.md).
 
 ---
 
