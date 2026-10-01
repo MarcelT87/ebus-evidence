@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from ebus_evidence import __version__
-from ebus_evidence.bundle import BundleError, create_bundle
+from ebus_evidence.bundle import BundleError, create_bundle, verify_bundle
 from ebus_evidence.discovery.ebusd import EbusdDiscovery, discover_ebusd
 from ebus_evidence.input.raw_file import (
     RawParseError,
@@ -393,6 +393,33 @@ def _bundle(args: argparse.Namespace) -> int:
     print("No absolute paths, resume checkpoint, host metadata or credentials are exported.")
     return 0
 
+
+def _verify(args: argparse.Namespace) -> int:
+    try:
+        result = verify_bundle(args.bundle)
+    except BundleError as exc:
+        print(f"INVALID: {exc}", file=sys.stderr)
+        return 2
+
+    print("eBUS Evidence bundle verify")
+    print(f"Bundle: {result['path']}")
+    print("Status: VALID")
+    print(f"SHA256: {result['sha256']}")
+    print(f"Profile: {result['profile']} (v{result['profile_version']})")
+    print(f"Created by tool version: {result['tool_version']}")
+    print(f"Members: {result['member_count']}")
+    print(f"State included: {'yes' if result['state_included'] else 'no'}")
+    print(
+        "Contexts: "
+        f"{result['context_metadata_count']} metadata, "
+        f"{result['context_raw_count']} raw"
+    )
+    print(
+        "Deterministic layout: "
+        f"{'yes' if result['deterministic_layout'] else 'no (content integrity still valid)'}"
+    )
+    return 0
+
 def _add_time_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--source-timezone",
@@ -533,6 +560,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="output ZIP path",
     )
     bundle.set_defaults(func=_bundle)
+
+    verify = subparsers.add_parser(
+        "verify",
+        help="verify an evidence bundle without extracting it",
+    )
+    verify.add_argument(
+        "bundle",
+        help="path to an ebus-evidence bundle ZIP",
+    )
+    verify.set_defaults(func=_verify)
 
     return parser
 
