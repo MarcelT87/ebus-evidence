@@ -11,6 +11,9 @@ It is designed for cross-installation comparisons during eBUS reverse engineerin
 - counts requests, responses and value variants
 - can decode simple numeric fields
 - exports a human-readable summary and optional JSON
+- can follow new raw-log records continuously with rotation-aware resume checkpoints
+- can optionally persist compact evidence aggregates
+- can optionally save small raw context bundles around explicit rare profile triggers
 
 It does **not** guess semantic names.
 
@@ -22,7 +25,7 @@ Early development preview (`0.1.0.dev0`).
 
 The first versions intentionally target **ebusd message-mode raw logs only**. This keeps installation, diagnostics and evidence collection predictable while the core is still being developed.
 
-Live watching, automatic ebusd discovery, MQTT enrichment, Docker packaging and an installer can be added after the core parser/profile/report path is stable.
+The current preview already includes automatic Docker/native-systemd discovery, offline analysis, passive live watching, compact persistent state, rotation-aware resume checkpoints and optional trigger context capture. MQTT enrichment, packaging and installers remain later work.
 
 ## Relationship to ebusd
 
@@ -288,6 +291,42 @@ ebus-evidence watch \
 
 A state file is intentionally optional in the current preview. Without `--state`, watch remains stateless and starts at the current end on every run.
 
+### Rare trigger context capture
+
+Profiles can explicitly mark a check for bounded raw context capture. Context capture is disabled unless a directory is supplied:
+
+```bash
+ebus-evidence watch \
+  --profile hw5103-open-evidence \
+  --state evidence-state.json \
+  --context-dir contexts
+```
+
+The bundled HW5103 profile currently triggers context only when the decoded HMU `/a80e` or `/ba08` value is non-zero. Each trigger keeps 120 seconds before and 180 seconds after the event. Frequent B512 and `/3538` observations do not trigger files.
+
+A context capture produces:
+
+```text
+YYYYMMDDTHHMMSS.mmm_<check>_NNNN.raw
+YYYYMMDDTHHMMSS.mmm_<check>_NNNN.json
+```
+
+The `.raw` file contains the original ebusd message-mode records from the bounded window. The JSON sidecar contains the profile/check ID, trigger timestamp and value, window sizes, completion flags and record count. It does not add hostnames, IP addresses, credentials or inferred semantics.
+
+Multiple triggers of the same check inside an already open context window are coalesced into one bundle and extend the post-trigger deadline. Existing bundles are never overwritten if a trigger is replayed after a restart.
+
+Profile example:
+
+```yaml
+context:
+  when:
+    value_nonzero: true
+  before_seconds: 120
+  after_seconds: 180
+```
+
+Context conditions are deterministic comparisons against already decoded evidence values or raw response strings. They do not perform semantic inference or confidence scoring.
+
 ## Raw logging
 
 `ebus-evidence` expects an **existing ebusd message-mode raw log**. It does not modify the ebusd configuration for you.
@@ -349,9 +388,9 @@ The tests use small synthetic raw-log fixtures. They do not require a running eb
 
 Once the offline core is stable:
 
-1. harden automatic read-only ebusd discovery across real Docker and native/systemd installations
-2. harden continuous read-only watch mode and add compact state persistence
-3. optional ebusd device metadata
+1. harden context bundles and evidence export for cross-installation sharing
+2. real-world native/systemd discovery validation
+3. optional read-only ebusd device metadata
 4. optional MQTT subscription for correlation context
 5. Docker image / Compose example
 6. native Linux installer and systemd service
