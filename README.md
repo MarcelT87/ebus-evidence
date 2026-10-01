@@ -48,6 +48,97 @@ On Windows PowerShell, activate the environment with:
 .venv\Scripts\Activate.ps1
 ```
 
+## Getting an ebusd raw log
+
+`ebus-evidence` needs an ebusd **message-mode raw log**.
+
+If you already have a file containing timestamped lines with `<...` or `>...`, you can use it directly.
+
+Example:
+
+```text
+2026-10-01 10:00:00.000 <1008b507020900...
+```
+
+### Native / systemd ebusd
+
+Add these options wherever your ebusd startup arguments are configured:
+
+```text
+--lograwdata
+--lograwdatafile=/var/log/ebusd.raw
+--lograwdatasize=102400
+```
+
+Then restart ebusd.
+
+`102400` means about 100 MiB. ebusd rotates the active file to `ebusd.raw.old` when the configured size is reached.
+
+Do **not** use:
+
+```text
+--lograwdata=bytes
+```
+
+That enables byte-level logging, while `ebus-evidence` currently expects the normal message-mode raw log.
+
+### Docker / Docker Compose
+
+With the official ebusd Docker environment variables, the same setup can look like this:
+
+```yaml
+services:
+  ebusd:
+    environment:
+      EBUSD_LOGRAWDATA: ""
+      EBUSD_LOGRAWDATAFILE: "/rawlog/ebusd.raw"
+      EBUSD_LOGRAWDATASIZE: "102400"
+    volumes:
+      - ./rawlog:/rawlog
+```
+
+Recreate or restart the ebusd container after changing the configuration.
+
+The raw log will then be available on the Docker host in:
+
+```text
+./rawlog/ebusd.raw
+```
+
+and, after rotation, possibly:
+
+```text
+./rawlog/ebusd.raw.old
+```
+
+### Check that it works
+
+First check that the file exists and is growing:
+
+```bash
+ls -lh /path/to/ebusd.raw*
+```
+
+Then inspect the first few records:
+
+```bash
+head -n 5 /path/to/ebusd.raw
+```
+
+You should see timestamps followed by `<...` or `>...` raw telegram data.
+
+Finally let `ebus-evidence` verify the file:
+
+```bash
+ebus-evidence doctor \
+  --raw /path/to/ebusd.raw \
+  --profile profiles/hw5103-open-evidence.yaml
+```
+
+If a rotated `.old` file exists, add `--include-rotated`.
+
+> ebusd installations differ. The important part is not where ebusd runs, but that `ebus-evidence` can read the message-mode raw log file. No Proxmox, Docker, MQTT or analyzer database is required.
+
 ## Quick start
 
 First check that the raw log and profile can be read:
