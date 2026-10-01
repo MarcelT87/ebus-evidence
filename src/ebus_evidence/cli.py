@@ -305,6 +305,8 @@ def _watch(args: argparse.Namespace) -> int:
         print("Skipped record reasons:")
         for reason, count in stats.skip_reasons.most_common():
             print(f"  {count:>5}  {reason}")
+            for sample in stats.skip_samples.get(reason, []):
+                print(f"         sample: {sample}")
     return 0
 
 def _add_time_arguments(parser: argparse.ArgumentParser) -> None:

@@ -24,6 +24,7 @@ class WatchStats:
     partial_tail: int = 0
     rotations: int = 0
     skip_reasons: Counter[str] = field(default_factory=Counter)
+    skip_samples: dict[str, list[str]] = field(default_factory=dict)
 
 
 class RawLogFollower:
@@ -190,8 +191,15 @@ def run_watch(
             try:
                 frame = parse_record(record)
             except RawParseError as exc:
+                reason = str(exc)
                 stats.skipped_records += 1
-                stats.skip_reasons[str(exc)] += 1
+                stats.skip_reasons[reason] += 1
+                samples = stats.skip_samples.setdefault(reason, [])
+                if len(samples) < 3:
+                    text = record.decode("ascii", "replace").strip().replace("\n", "\\n")
+                    if len(text) > 160:
+                        text = text[:157] + "..."
+                    samples.append(f"bytes={len(record)} record={text}")
                 continue
             stats.frames += 1
             for event in frame_events(
