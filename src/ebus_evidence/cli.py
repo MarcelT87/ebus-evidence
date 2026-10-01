@@ -18,7 +18,7 @@ from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.report import analyze_frames, format_text
 from ebus_evidence.timeutil import TimezoneError, get_timezone
 from ebus_evidence.state import EvidenceStateStore, StateError
-from ebus_evidence.watch import run_watch
+from ebus_evidence.watch import ResumeError, run_watch
 
 
 def _resolve_sources(raw_path: str, include_rotated: bool) -> list[Path]:
@@ -271,13 +271,32 @@ def _watch(args: argparse.Namespace) -> int:
         print("Timestamps: raw values, timezone unspecified")
 
     state_store = None
+    if args.reset_checkpoint and not args.state:
+        print("error: --reset-checkpoint requires --state", file=sys.stderr)
+        return 2
+
     if args.state:
         try:
             state_store = EvidenceStateStore.open(args.state, profile)
+            if args.reset_checkpoint:
+                state_store.clear_checkpoint(
+                    reason="user acknowledged a resume gap with --reset-checkpoint"
+                )
         except StateError as exc:
             print(f"error: cannot open evidence state: {exc}", file=sys.stderr)
             return 2
         print(f"State: {args.state} ({state_store.total_events} existing events)")
+        if args.reset_checkpoint:
+            print("Checkpoint: reset; continuity gap recorded")
+        elif state_store.checkpoint is None:
+            print("Checkpoint: none; first run starts at the current raw-log end")
+        else:
+            print(
+                "Checkpoint: "
+                f"device={state_store.checkpoint['device']} "
+                f"inode={state_store.checkpoint['inode']} "
+                f"offset={state_store.checkpoint['offset']}"
+            )
     print()
 
     try:
@@ -291,6 +310,15 @@ def _watch(args: argparse.Namespace) -> int:
             json_lines=args.json_lines,
             state_store=state_store,
         )
+    except ResumeError as exc:
+        print(f"error: cannot resume watch safely: {exc}", file=sys.stderr)
+        if args.state:
+            print(
+                "hint: if the missing interval is acceptable, rerun with "
+                "--reset-checkpoint to record the continuity gap and start at the current end",
+                file=sys.stderr,
+            )
+        return 2
     except (OSError, StateError) as exc:
         print(f"error: cannot watch raw log: {exc}", file=sys.stderr)
         return 2
@@ -299,7 +327,8 @@ def _watch(args: argparse.Namespace) -> int:
     print(
         f"Watch summary: frames={stats.frames} matches={stats.matches} "
         f"non_frames={stats.non_frame_records} skipped={stats.skipped_records} "
-        f"partial_tail={stats.partial_tail} rotations={stats.rotations}"
+        f"partial_tail={stats.partial_tail} rotations={stats.rotations} "
+        f"resume={stats.resume_mode}"
     )
     if stats.non_frame_kinds:
         print("Non-frame records:")
@@ -407,7 +436,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch.add_argument(
         "--state",
-        help="optional compact JSON evidence state persisted across watch runs",
+        help="optional compact JSON evidence state and resume checkpoint",
+    )
+    watch.add_argument(
+        "--reset-checkpoint",
+        action="store_true",
+        help="acknowledge a continuity gap, clear a stale checkpoint, and start at the current raw-log end",
     )
     _add_time_arguments(watch)
     watch.set_defaults(func=_watch)
