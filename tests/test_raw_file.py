@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from ebus_evidence.input.raw_file import (
+    RawNonFrame,
     parse_record,
     resolve_raw_sources,
     split_records,
@@ -60,3 +61,16 @@ def test_split_record_buffer_keeps_tail_until_next_record():
     final, tail = split_record_buffer(tail, flush=True)
     assert final == [second]
     assert tail == b""
+
+
+def test_short_message_mode_record_is_non_frame():
+    import pytest
+
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(b"2026-10-01 21:08:32.675 <00")
+    assert excinfo.value.kind == "short_fragment"
+    assert "00" in str(excinfo.value)
+
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(b"2026-10-01 21:09:20.589 <01")
+    assert excinfo.value.kind == "short_fragment"
