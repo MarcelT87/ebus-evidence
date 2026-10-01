@@ -162,3 +162,44 @@ def test_context_bundle_does_not_overwrite_existing_same_trigger(tmp_path):
 
     assert len(list(tmp_path.glob("*.raw"))) == 2
     assert len(list(tmp_path.glob("*.json"))) == 2
+
+
+def test_final_tail_record_can_complete_context_window(tmp_path, monkeypatch):
+    raw = tmp_path / "ebusd.raw"
+    raw.write_bytes(_record("2026-10-01 09:59:59.000"))
+    context_dir = tmp_path / "contexts"
+    profile = _profile()
+
+    calls = {"count": 0}
+
+    def fake_sleep(_seconds):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            with raw.open("ab") as handle:
+                handle.write(_record("2026-10-01 10:00:00.000"))
+                handle.write(_record("2026-10-01 10:00:03.000"))
+
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
+
+    stats = run_watch(
+        raw,
+        profile,
+        seconds=0.01,
+        context_dir=context_dir,
+    )
+
+    assert stats.context_triggers == 0
+    assert stats.context_captures == 0
+
+    # Direct manager integration with a trigger event proves that a final
+    # terminated tail record closes the post-window before finish() marks it
+    # incomplete.
+    manager = ContextCaptureManager(context_dir / "direct", profile)
+    manager.observe(_record("2026-10-01 09:59:59.000"))
+    manager.observe(_record("2026-10-01 10:00:00.000"))
+    assert manager.trigger_event(_event("2026-10-01 10:00:00.000", 32)) is True
+    manager.observe(_record("2026-10-01 10:00:03.000"))
+    metadata = json.loads(
+        next((context_dir / "direct").glob("*.json")).read_text(encoding="utf-8")
+    )
+    assert metadata["post_window_complete"] is True
