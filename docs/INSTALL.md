@@ -6,6 +6,8 @@ You do not need Home Assistant, MQTT, Proxmox, or an analyzer database.
 
 `ebus-evidence` does not talk to the eBUS adapter and does not send eBUS commands. It reads a raw log that is already written by normal `ebusd`.
 
+If you need help understanding the difference between Docker/native ebusd, USB/network adapters, `ens:`/`enh:`, mDNS, remote hosts, or the ebusd TCP client port, see [ebusd setup matrix](EBUSD_SETUPS.md).
+
 ---
 
 ## 1. First: which setup do you have?
