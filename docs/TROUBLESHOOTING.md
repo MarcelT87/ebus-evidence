@@ -111,6 +111,8 @@ ebus-evidence doctor
 
 If automatic discovery fails, first determine where normal ebusd runs.
 
+If ebusd runs as a **Home Assistant OS eBUSd App/Add-on**, automatic Docker/systemd discovery from a separate computer is not the expected path. Use the file-based [Home Assistant guide](HOME_ASSISTANT.md) instead.
+
 ## Docker check
 
 ```bash
@@ -170,6 +172,7 @@ Do not use:
 For Docker and native examples, see:
 
 - [Installation and first run](INSTALL.md)
+- [Home Assistant](HOME_ASSISTANT.md)
 - [ebusd setup matrix](EBUSD_SETUPS.md)
 
 After enabling logging, verify that the file exists and grows.
