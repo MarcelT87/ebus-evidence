@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from ebus_evidence.profiles.loader import load_profile
+from ebus_evidence.state import EvidenceStateStore
 from ebus_evidence.watch import ResumeError, RawLogFollower, frame_events, run_watch
 from ebus_evidence.input.raw_file import parse_record
 
@@ -267,3 +268,44 @@ def test_checkpoint_contains_content_anchor(tmp_path):
     assert checkpoint["offset"] == path.stat().st_size
     assert 0 <= checkpoint["anchor_start"] <= checkpoint["offset"]
     assert len(checkpoint["anchor_sha256"]) == 64
+
+
+def test_state_writes_are_batched_between_initial_and_final_flush(tmp_path, monkeypatch):
+    path = tmp_path / "ebusd.raw"
+    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    profile = {"name": "none", "version": 1, "checks": []}
+    store = EvidenceStateStore.open(tmp_path / "state.json", profile)
+
+    writes = []
+    original_save = EvidenceStateStore.save
+
+    def counted_save(self):
+        writes.append(self.checkpoint)
+        return original_save(self)
+
+    monkeypatch.setattr(EvidenceStateStore, "save", counted_save)
+
+    calls = {"count": 0}
+
+    def fake_sleep(_seconds):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            with path.open("ab") as handle:
+                handle.write(_record("2026-10-01 10:00:01.000"))
+                handle.write(_record("2026-10-01 10:00:02.000"))
+
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
+
+    run_watch(
+        path,
+        profile,
+        seconds=0.01,
+        state_store=store,
+        state_flush_interval=3600,
+    )
+
+    # One immediate write establishes the first checkpoint. Despite many poll
+    # iterations, all subsequent cursor movement is persisted only by the
+    # forced final flush.
+    assert len(writes) == 2
