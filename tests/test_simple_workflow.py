@@ -83,13 +83,15 @@ def test_export_automatically_includes_valid_system_identity(tmp_path, monkeypat
     assert verified["context_raw_count"] == 0
 
 
-def test_export_requires_collected_evidence(tmp_path, monkeypatch):
+def test_export_requires_collected_evidence(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["export"]) == 2
+    out = capsys.readouterr().out
+    assert "hint: run './evidence collect' first" in out
     assert not (tmp_path / "data" / "evidence.zip").exists()
 
 
-def test_export_refuses_zero_frame_state(tmp_path, monkeypatch):
+def test_export_refuses_zero_frame_state(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     raw = tmp_path / "ebusd.raw"
     raw.write_bytes(_record("2026-10-01 10:00:00.000"))
@@ -98,7 +100,10 @@ def test_export_refuses_zero_frame_state(tmp_path, monkeypatch):
     assert (tmp_path / "data" / "evidence-state.json").is_file()
 
     assert main(["status", "--raw", str(raw)]) == 0
+    capsys.readouterr()
     assert main(["export"]) == 2
+    out = capsys.readouterr().out
+    assert "run './evidence collect' while the raw log is growing" in out
     assert not (tmp_path / "data" / "evidence.zip").exists()
 
 

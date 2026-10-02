@@ -107,7 +107,10 @@ Therefore:
 - changing `YOUR-MODEL` to another human label does not change the signature;
 - firmware or hardware differences do change the signature.
 
-The signature is intended for grouping comparable systems. It is not a personal installation identifier.
+The signature is intended for grouping comparable technical systems. It does
+not contain a name, account, serial number, hostname or network address, but it
+is still a deterministic technical fingerprint and may be linkable when a
+hardware/firmware topology is uncommon.
 
 ---
 
