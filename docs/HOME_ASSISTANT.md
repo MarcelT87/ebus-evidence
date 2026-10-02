@@ -76,6 +76,20 @@ You should then have:
 
 inside the eBUSd App.
 
+With the current App config-folder mapping, that same file is available on the
+Home Assistant host as:
+
+```text
+/addon_configs/2ad9b828_ebusd/ebusd.raw
+```
+
+So these are two views of the same persistent file:
+
+```text
+inside eBUSd App:  /config/ebusd.raw
+HA host:           /addon_configs/2ad9b828_ebusd/ebusd.raw
+```
+
 The App documentation describes access to its config folder through:
 
 - Studio Code Server;
