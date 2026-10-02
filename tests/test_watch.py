@@ -309,3 +309,88 @@ def test_state_writes_are_batched_between_initial_and_final_flush(tmp_path, monk
     # iterations, all subsequent cursor movement is persisted only by the
     # forced final flush.
     assert len(writes) == 2
+
+
+def test_watch_persists_observation_without_profile_matches(tmp_path, monkeypatch):
+    path = tmp_path / "ebusd.raw"
+    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    profile = {"name": "none", "version": 1, "checks": []}
+    store = EvidenceStateStore.open(tmp_path / "state.json", profile)
+
+    calls = {"count": 0}
+
+    def fake_sleep(_seconds):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            with path.open("ab") as handle:
+                handle.write(_record("2026-10-01 10:00:01.000"))
+                handle.write(b"2026-10-01 10:00:02.000 <00\n")
+                handle.write(b"2026-10-01 10:00:03.000 <a\n")
+                handle.write(_record("2026-10-01 10:00:04.000"))
+
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
+
+    run_watch(
+        path,
+        profile,
+        seconds=0.01,
+        state_store=store,
+        state_flush_interval=3600,
+        source_timezone="UTC",
+    )
+
+    reloaded = EvidenceStateStore.open(tmp_path / "state.json", profile)
+    observation = reloaded.state["observation"]
+    assert observation["frames_seen"] == 2
+    assert observation["non_frames"] == 1
+    assert observation["skipped"] == 1
+    assert observation["first_frame_timestamp"]["raw"] == "2026-10-01 10:00:01.000"
+    assert observation["last_frame_timestamp"]["raw"] == "2026-10-01 10:00:04.000"
+
+
+def test_watch_resume_does_not_double_count_persisted_observation(tmp_path, monkeypatch):
+    path = tmp_path / "ebusd.raw"
+    path.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    profile = {"name": "none", "version": 1, "checks": []}
+    state_path = tmp_path / "state.json"
+    store = EvidenceStateStore.open(state_path, profile)
+
+    first_calls = {"count": 0}
+
+    def first_sleep(_seconds):
+        first_calls["count"] += 1
+        if first_calls["count"] == 1:
+            with path.open("ab") as handle:
+                handle.write(_record("2026-10-01 10:00:01.000"))
+                handle.write(_record("2026-10-01 10:00:02.000"))
+
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", first_sleep)
+    run_watch(
+        path,
+        profile,
+        seconds=0.01,
+        state_store=store,
+        state_flush_interval=3600,
+    )
+
+    after_first = EvidenceStateStore.open(state_path, profile)
+    assert after_first.state["observation"]["frames_seen"] == 2
+
+    with path.open("ab") as handle:
+        handle.write(_record("2026-10-01 10:00:03.000"))
+        handle.write(_record("2026-10-01 10:00:04.000"))
+
+    second_store = EvidenceStateStore.open(state_path, profile)
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", lambda _seconds: None)
+    run_watch(
+        path,
+        profile,
+        seconds=0.001,
+        state_store=second_store,
+        state_flush_interval=3600,
+    )
+
+    final = EvidenceStateStore.open(state_path, profile)
+    assert final.state["observation"]["frames_seen"] == 4
