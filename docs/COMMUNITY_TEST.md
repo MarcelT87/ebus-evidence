@@ -154,14 +154,16 @@ For hardware/firmware comparison, prefer the structured [System identity](SYSTEM
 Example:
 
 ```bash
+mkdir -p data
+
 ebus-evidence system \
-  --scan-result scan-result.txt \
+  --scan-result data/scan-result.txt \
   --manufacturer Vaillant \
   --model "105/6 A" \
-  --output system.json
+  --output data/system.json
 ```
 
-This does not start a scan. It keeps only address/manufacturer/device ID/SW/HW and ignores additional scan columns.
+This does not start a scan. It keeps only address/manufacturer/device ID/SW/HW and ignores additional scan columns. Keep the copied scan-result input and generated system identity under `data/`; that directory is ignored by Git.
 
 Include it in the bundle with:
 
@@ -169,7 +171,7 @@ Include it in the bundle with:
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
-  --system system.json \
+  --system data/system.json \
   --output evidence.zip
 ```
 
