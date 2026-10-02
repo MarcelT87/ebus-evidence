@@ -283,6 +283,7 @@ def create_bundle(
             "host_metadata_included": False,
             "credentials_included": False,
             "full_raw_log_included": False,
+            "absolute_timestamps_included": True,
             "context_raw_may_contain_device_specific_bus_data": context_raw_count > 0,
             "review_context_raw_before_public_sharing": context_raw_count > 0,
         },
@@ -587,6 +588,15 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         ):
             if privacy.get(key) is not False:
                 raise BundleError(f"manifest privacy flag must be false: {key}")
+        # New bundle-v1 files explicitly disclose that evidence contains
+        # absolute timestamps. Older bundle-v1 files predate this privacy flag,
+        # so absence remains accepted for backward compatibility.
+        absolute_timestamps = privacy.get("absolute_timestamps_included")
+        if absolute_timestamps is not None and absolute_timestamps is not True:
+            raise BundleError(
+                "manifest absolute_timestamps_included must be true when present"
+            )
+
         raw_present = bool(context_raw_names)
         if privacy.get("context_raw_may_contain_device_specific_bus_data") is not raw_present:
             raise BundleError("manifest raw-data privacy flag does not match ZIP contents")
@@ -620,5 +630,6 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         ),
         "context_metadata_count": len(context_metadata_names),
         "context_raw_count": len(context_raw_names),
+        "absolute_timestamps_included": absolute_timestamps,
         "deterministic_layout": deterministic_layout,
     }
