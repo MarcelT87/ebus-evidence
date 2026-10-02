@@ -186,7 +186,33 @@ rough observation duration:
 
 Do not include passwords, access tokens, network addresses or unrelated Home Assistant configuration.
 
-## 9. What we compare
+## 9. Observation scope
+
+A persistent watch state now records how much bus traffic was actually observed:
+
+```text
+frames_seen
+passive_frames
+ebusd_initiated_frames
+non_frames
+skipped
+first_frame_timestamp
+last_frame_timestamp
+```
+
+These counters are saved together with the watch checkpoint, so a clean resume does not silently double-count already persisted data.
+
+This matters especially for negative evidence. For example:
+
+```text
+value X was not observed
+```
+
+must be interpreted together with the number of complete frames and the observed time span. A short test and a multi-day observation are not equivalent.
+
+No duration is fabricated when the raw timestamp timezone is unknown. The original first/last frame timestamps are preserved; timezone-aware UTC/display forms are included when the source timezone was explicitly supplied.
+
+## 10. What we compare
 
 The primary cross-installation questions are factual:
 
