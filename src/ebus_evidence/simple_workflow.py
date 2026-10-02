@@ -187,6 +187,7 @@ def status(
 
     state_file = Path(state_path)
     state_ready = False
+    state_has_observation = False
     if state_file.is_file():
         try:
             store = EvidenceStateStore.open(state_file, profile)
@@ -195,6 +196,7 @@ def status(
         else:
             state_ready = True
             observation = store.state["observation"]
+            state_has_observation = int(observation["frames_seen"]) > 0
             print(f"Evidence state ...... present ({state_file})")
             print(f"Frames observed ..... {observation['frames_seen']}")
             print(f"Evidence events ..... {store.total_events}")
@@ -229,7 +231,7 @@ def status(
     else:
         print("System identity ..... absent (optional)")
 
-    ready = state_ready or context_count > 0
+    ready = state_has_observation or context_count > 0
     print()
     print(f"Ready to export ..... {'YES' if ready else 'NO'}")
     if ready:
@@ -266,12 +268,30 @@ def export(
     state_arg = state_file if state_file.is_file() else None
     context_arg = contexts if contexts.is_dir() else None
     system_arg = system_file if system_file.is_file() else None
+    context_count = (
+        len(list(contexts.glob("*.json")))
+        if context_arg is not None
+        else 0
+    )
 
-    if state_arg is None and (
-        context_arg is None or not any(contexts.glob("*.json"))
-    ):
-        print("error: no collected evidence found")
-        print("hint: run 'ebus-evidence collect' first")
+    state_frames = 0
+    if state_arg is not None:
+        try:
+            store = EvidenceStateStore.open(state_arg, profile)
+        except StateError as exc:
+            print(f"error: collected evidence state is invalid: {exc}")
+            return 2
+        state_frames = int(store.state["observation"]["frames_seen"])
+
+    if state_frames == 0 and context_count == 0:
+        print("error: no observed evidence is ready to export")
+        if state_arg is not None:
+            print(
+                "hint: the state exists but contains 0 observed frames; "
+                "run 'ebus-evidence collect' while the raw log is growing"
+            )
+        else:
+            print("hint: run 'ebus-evidence collect' first")
         return 2
 
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -282,7 +302,7 @@ def export(
     print(f"Evidence state ...... {'included' if state_arg else 'not present'}")
     print(
         f"Context metadata .... "
-        f"{len(list(contexts.glob('*.json'))) if context_arg else 0}"
+        f"{context_count}"
     )
     print(f"System identity ..... {'included' if system_arg else 'not present'}")
     print(
