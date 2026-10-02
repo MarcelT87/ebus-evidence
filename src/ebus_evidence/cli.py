@@ -27,6 +27,7 @@ from ebus_evidence.simple_workflow import (
     DEFAULT_SYSTEM,
     collect as simple_collect,
     export as simple_export,
+    import_raw as simple_import_raw,
     status as simple_status,
 )
 from ebus_evidence.system_identity import SystemIdentityError, create_system_document
@@ -539,6 +540,18 @@ def _collect(args: argparse.Namespace) -> int:
     )
 
 
+def _import_raw(args: argparse.Namespace) -> int:
+    return simple_import_raw(
+        raw_path=args.raw,
+        profile_name=args.profile,
+        state_path=args.state,
+        context_dir=args.context_dir,
+        include_rotated=args.include_rotated,
+        source_timezone=args.source_timezone,
+        display_timezone=args.display_timezone,
+    )
+
+
 def _status(args: argparse.Namespace) -> int:
     return simple_status(
         raw_path=args.raw,
@@ -640,6 +653,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_time_arguments(collect)
     collect.set_defaults(func=_collect)
+
+    import_cmd = subparsers.add_parser(
+        "import",
+        help="build evidence state from an existing static ebusd raw log",
+    )
+    import_cmd.add_argument(
+        "--raw",
+        required=True,
+        help="path to a static/copied ebusd message-mode raw log",
+    )
+    import_cmd.add_argument(
+        "--include-rotated",
+        action="store_true",
+        help="also import sibling FILE.old before the active file when present",
+    )
+    import_cmd.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help=f"profile path or bundled profile name (default: {DEFAULT_PROFILE})",
+    )
+    import_cmd.add_argument(
+        "--state",
+        default=DEFAULT_STATE,
+        help=f"fresh evidence state output (default: {DEFAULT_STATE})",
+    )
+    import_cmd.add_argument(
+        "--context-dir",
+        default=DEFAULT_CONTEXT_DIR,
+        help=f"empty context output directory (default: {DEFAULT_CONTEXT_DIR})",
+    )
+    _add_time_arguments(import_cmd)
+    import_cmd.set_defaults(func=_import_raw)
 
     status = subparsers.add_parser(
         "status",
