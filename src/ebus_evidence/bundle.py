@@ -11,6 +11,7 @@ import yaml
 
 from ebus_evidence import __version__
 from ebus_evidence.profiles.loader import ProfileError, validate_profile_data
+from ebus_evidence.provenance import ProvenanceError, bundle_provenance
 from ebus_evidence.state import load_state
 from ebus_evidence.system_identity import (
     SystemIdentityError,
@@ -39,6 +40,14 @@ def _canonical_yaml(data: Any) -> bytes:
         allow_unicode=True,
         default_flow_style=False,
     ).encode("utf-8")
+
+
+def _valid_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(ch in "0123456789abcdef" for ch in value)
+    )
 
 
 def _validate_shared_observation(value: Any) -> dict[str, Any]:
@@ -255,7 +264,8 @@ def create_bundle(
     )
     members.extend(context_members)
 
-    members.append(("profile.yaml", _canonical_yaml(profile)))
+    profile_bytes = _canonical_yaml(profile)
+    members.append(("profile.yaml", profile_bytes))
 
     context_metadata_count = sum(
         1 for name, _ in context_members if name.endswith(".json")
@@ -267,11 +277,17 @@ def create_bundle(
     if state_summary is None and context_metadata_count == 0:
         raise BundleError("no evidence found in the requested bundle inputs")
 
+    try:
+        provenance = bundle_provenance(profile_bytes=profile_bytes)
+    except ProvenanceError as exc:
+        raise BundleError(f"cannot determine bundle provenance: {exc}") from exc
+
     manifest = {
         "format": _BUNDLE_FORMAT,
         "tool_version": __version__,
         "profile": profile["name"],
         "profile_version": profile.get("version", 1),
+        "provenance": provenance,
         "evidence_state_included": state_summary is not None,
         "system_identity_included": system_identity is not None,
         "context_metadata_count": context_metadata_count,
@@ -467,6 +483,41 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         if manifest["profile_version"] != profile.get("version", 1):
             raise BundleError("manifest/profile version mismatch")
 
+        provenance = manifest.get("provenance")
+        if provenance is not None:
+            if not isinstance(provenance, dict):
+                raise BundleError("manifest provenance must be a mapping when present")
+
+            tool_runtime = provenance.get("tool_runtime")
+            if not isinstance(tool_runtime, dict):
+                raise BundleError("manifest provenance requires tool_runtime")
+            if tool_runtime.get("algorithm") != "ebus-evidence-runtime-sha256-v1":
+                raise BundleError("unsupported tool runtime provenance algorithm")
+            if not _valid_sha256(tool_runtime.get("sha256")):
+                raise BundleError("manifest provenance tool runtime SHA-256 is invalid")
+
+            profile_sha256 = provenance.get("profile_sha256")
+            if not _valid_sha256(profile_sha256):
+                raise BundleError("manifest provenance profile SHA-256 is invalid")
+            if profile_sha256 != checksums["profile.yaml"]:
+                raise BundleError(
+                    "manifest provenance profile SHA-256 does not match profile.yaml"
+                )
+
+            git_provenance = provenance.get("git")
+            if git_provenance is not None:
+                if not isinstance(git_provenance, dict):
+                    raise BundleError("manifest provenance git must be a mapping or null")
+                commit = git_provenance.get("commit")
+                if (
+                    not isinstance(commit, str)
+                    or len(commit) not in {40, 64}
+                    or any(ch not in "0123456789abcdef" for ch in commit)
+                ):
+                    raise BundleError("manifest provenance git commit is invalid")
+                if not isinstance(git_provenance.get("dirty"), bool):
+                    raise BundleError("manifest provenance git dirty must be boolean")
+
         state_present = "evidence/state.json" in names
         if bool(manifest.get("evidence_state_included")) != state_present:
             raise BundleError("manifest evidence_state_included does not match ZIP contents")
@@ -616,6 +667,7 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         "tool_version": manifest["tool_version"],
         "profile": profile["name"],
         "profile_version": profile.get("version", 1),
+        "provenance": deepcopy(provenance) if isinstance(provenance, dict) else None,
         "state_included": state_present,
         "observation": (
             deepcopy(state.get("observation"))

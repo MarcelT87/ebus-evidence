@@ -177,6 +177,9 @@ def test_bundle_is_deterministic_and_checksums_verify(tmp_path):
 
         manifest = json.loads(archive.read("manifest.json"))
         assert manifest["format"] == "ebus-evidence-bundle-v1"
+        provenance = manifest["provenance"]
+        assert provenance["tool_runtime"]["algorithm"] == "ebus-evidence-runtime-sha256-v1"
+        assert len(provenance["tool_runtime"]["sha256"]) == 64
         assert manifest["evidence_state_included"] is True
         assert manifest["context_metadata_count"] == 1
         assert manifest["context_raw_count"] == 1
@@ -199,6 +202,10 @@ def test_bundle_is_deterministic_and_checksums_verify(tmp_path):
         assert "checkpoint" not in shared
 
         checksums = json.loads(archive.read("checksums.json"))["sha256"]
+        assert provenance["profile_sha256"] == checksums["profile.yaml"]
+        if provenance["git"] is not None:
+            assert len(provenance["git"]["commit"]) in {40, 64}
+            assert isinstance(provenance["git"]["dirty"], bool)
         for name, expected in checksums.items():
             assert hashlib.sha256(archive.read(name)).hexdigest() == expected
 
@@ -271,6 +278,7 @@ def test_verify_accepts_valid_bundle(tmp_path):
     assert verified["sha256"] == created["sha256"]
     assert verified["profile"] == PROFILE["name"]
     assert verified["profile_version"] == PROFILE["version"]
+    assert verified["provenance"] == created["manifest"]["provenance"]
     assert verified["state_included"] is True
     assert verified["context_metadata_count"] == 1
     assert verified["context_raw_count"] == 1
@@ -438,6 +446,103 @@ def test_verify_accepts_legacy_manifest_without_timestamp_privacy_flag(tmp_path)
     verified = verify_bundle(legacy)
     assert verified["valid"] is True
     assert verified["absolute_timestamps_included"] is None
+
+
+def test_verify_accepts_legacy_bundle_without_provenance(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    current = tmp_path / "current-provenance.zip"
+    legacy = tmp_path / "legacy-no-provenance.zip"
+    create_bundle(current, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(current) as src:
+        members = {name: src.read(name) for name in src.namelist()}
+
+    manifest = json.loads(members["manifest.json"])
+    manifest.pop("provenance")
+    members["manifest.json"] = (
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"]["manifest.json"] = hashlib.sha256(
+        members["manifest.json"]
+    ).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    with zipfile.ZipFile(legacy, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name in sorted(members):
+            dst.writestr(name, members[name])
+
+    verified = verify_bundle(legacy)
+    assert verified["valid"] is True
+    assert verified["provenance"] is None
+
+
+def test_verify_rejects_profile_provenance_mismatch(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original-provenance.zip"
+    invalid = tmp_path / "invalid-provenance.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src:
+        members = {name: src.read(name) for name in src.namelist()}
+
+    manifest = json.loads(members["manifest.json"])
+    manifest["provenance"]["profile_sha256"] = "0" * 64
+    members["manifest.json"] = (
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"]["manifest.json"] = hashlib.sha256(
+        members["manifest.json"]
+    ).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    with zipfile.ZipFile(invalid, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name in sorted(members):
+            dst.writestr(name, members[name])
+
+    with pytest.raises(BundleError, match="does not match profile.yaml"):
+        verify_bundle(invalid)
+
+
+def test_verify_rejects_invalid_runtime_provenance_digest(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original-runtime-provenance.zip"
+    invalid = tmp_path / "invalid-runtime-provenance.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src:
+        members = {name: src.read(name) for name in src.namelist()}
+
+    manifest = json.loads(members["manifest.json"])
+    manifest["provenance"]["tool_runtime"]["sha256"] = "not-a-sha"
+    members["manifest.json"] = (
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"]["manifest.json"] = hashlib.sha256(
+        members["manifest.json"]
+    ).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    with zipfile.ZipFile(invalid, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name in sorted(members):
+            dst.writestr(name, members[name])
+
+    with pytest.raises(BundleError, match="tool runtime SHA-256 is invalid"):
+        verify_bundle(invalid)
 
 
 def test_verify_rejects_invalid_observation_counts(tmp_path):

@@ -542,6 +542,17 @@ def export(
     )
     print(f"Context metadata .... {verified['context_metadata_count']}")
     print(f"Raw context ......... {verified['context_raw_count']}")
+    provenance = verified.get("provenance")
+    if isinstance(provenance, dict):
+        runtime = provenance["tool_runtime"]
+        print(f"Tool runtime SHA256 . {runtime['sha256']}")
+        print(f"Profile SHA256 ...... {provenance['profile_sha256']}")
+        git = provenance.get("git")
+        if isinstance(git, dict):
+            status = "dirty" if git["dirty"] else "clean"
+            print(f"Source commit ....... {git['commit']} ({status})")
+        else:
+            print("Source commit ....... unavailable")
     if verified.get("absolute_timestamps_included") is True:
         print("Absolute timestamps . yes")
     print(f"SHA256 .............. {created['sha256']}")

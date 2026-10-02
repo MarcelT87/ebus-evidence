@@ -51,7 +51,10 @@ construction and several typed members use strict allowlists, but a manually
 constructed conforming bundle must still be treated as untrusted submitted
 content.
 
-A technically capable third party can construct a conforming bundle.
+A technically capable third party can construct a conforming bundle. The
+provenance fields described below do not change that trust model: they identify
+the runtime/profile claimed by the bundle, but they do not authenticate the
+submitter or attest an official build.
 
 Consumers must therefore treat a valid bundle as **integrity-checked submitted
 evidence**, not as automatically trusted protocol truth. Semantic conclusions
@@ -105,6 +108,17 @@ Current v1 manifest shape:
   "tool_version": "0.1.0.dev0",
   "profile": "hw5103-open-evidence",
   "profile_version": 2,
+  "provenance": {
+    "tool_runtime": {
+      "algorithm": "ebus-evidence-runtime-sha256-v1",
+      "sha256": "<64 lowercase hex characters>"
+    },
+    "profile_sha256": "<64 lowercase hex characters>",
+    "git": {
+      "commit": "<40 or 64 lowercase hex characters>",
+      "dirty": false
+    }
+  },
   "evidence_state_included": true,
   "system_identity_included": false,
   "context_metadata_count": 0,
@@ -129,6 +143,52 @@ The verifier requires the manifest profile name/version to match
 For backward compatibility, older bundle-v1 manifests may omit
 `privacy.absolute_timestamps_included`. Current bundles explicitly set it to
 `true`.
+
+Older bundle-v1 manifests may also omit `provenance`. Current exporters include
+it.
+
+### Provenance
+
+Current provenance records:
+
+- `tool_runtime.sha256` — a deterministic SHA-256 fingerprint of the installed
+  `ebus_evidence` runtime package;
+- `profile_sha256` — SHA-256 of the exact canonical `profile.yaml` bytes
+  embedded in the bundle;
+- `git.commit` and `git.dirty` — optional source-checkout information only
+  when the running package directory is exactly the checkout's
+  `src/ebus_evidence` directory.
+
+The runtime hash algorithm identifier is:
+
+```text
+ebus-evidence-runtime-sha256-v1
+```
+
+It hashes the algorithm identifier followed by all regular `.py`, `.yaml`
+and `.yml` files below the installed `ebus_evidence` package directory in
+lexicographic relative-path order. Each file contributes its relative path,
+byte length and exact bytes using NUL separators.
+
+This deliberately excludes host paths, timestamps, usernames and machine
+identity, so provenance does not make otherwise deterministic bundles depend on
+local environment details.
+
+`git` is `null` when Git metadata cannot be determined safely, including
+non-editable/wheel-style installs even when their virtual environment happens to
+live inside a Git repository. This avoids attaching an unrelated or stale outer
+checkout revision to installed runtime bytes.
+
+A missing Git record does not make the bundle invalid because the runtime and
+profile hashes remain available.
+
+The verifier validates provenance syntax and requires
+`provenance.profile_sha256` to equal the checksum of the embedded
+`profile.yaml`.
+
+The verifier cannot prove that a submitter did not manually forge provenance.
+These fields are reproducibility/grouping metadata, not a signature or remote
+attestation.
 
 ## `checksums.json`
 
@@ -426,10 +486,16 @@ than silently changing the meaning of `ebus-evidence-bundle-v1`.
 
 Profile version changes are separate from bundle-format changes.
 
-The current bundle records `tool_version`, but it does not contain a source
-commit, build signature or cryptographic publisher identity. Those may be added
-in a future compatible or versioned provenance design; consumers must not infer
-them today.
+Current exporters add optional-compatible provenance inside bundle v1:
+a deterministic runtime-package SHA-256, the exact embedded profile SHA-256,
+and source-checkout Git commit/dirty status when available.
+
+Older bundle-v1 archives without `provenance` remain valid and are reported as
+legacy provenance.
+
+No current provenance field is a build signature, publisher identity,
+cryptographic attestation or proof that a bundle was created by an official
+binary.
 
 ## Reference implementation
 
