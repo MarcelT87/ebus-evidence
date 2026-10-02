@@ -398,6 +398,13 @@ def _system(args: argparse.Namespace) -> int:
 
 
 def _bundle(args: argparse.Namespace) -> int:
+    if args.include_context_raw and args.no_context_raw:
+        print(
+            "error: --include-context-raw and --no-context-raw cannot be used together",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
         profile = load_profile(args.profile)
     except ProfileError as exc:
@@ -411,7 +418,7 @@ def _bundle(args: argparse.Namespace) -> int:
             state_path=args.state,
             context_dir=args.context_dir,
             system_path=args.system,
-            include_context_raw=not args.no_context_raw,
+            include_context_raw=bool(args.include_context_raw and not args.no_context_raw),
         )
     except BundleError as exc:
         print(f"error: cannot create evidence bundle: {exc}", file=sys.stderr)
@@ -656,9 +663,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional validated ebus-evidence system identity JSON",
     )
     bundle.add_argument(
+        "--include-context-raw",
+        action="store_true",
+        help="explicitly include raw context files; review them before public sharing",
+    )
+    bundle.add_argument(
         "--no-context-raw",
         action="store_true",
-        help="include context metadata only, without the raw context files",
+        help=argparse.SUPPRESS,
     )
     bundle.add_argument(
         "--output",
