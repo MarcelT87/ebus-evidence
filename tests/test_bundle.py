@@ -5,7 +5,12 @@ import zipfile
 import pytest
 
 from ebus_evidence.bundle import BundleError, create_bundle, shared_state, verify_bundle
-from ebus_evidence.state import new_state, save_state, update_state
+from ebus_evidence.state import (
+    new_state,
+    save_state,
+    update_observation_frame,
+    update_state,
+)
 from ebus_evidence.system_identity import build_system_document, parse_scan_result
 
 
@@ -38,6 +43,11 @@ def _event():
 
 def _write_state(path):
     state = new_state(PROFILE)
+    update_observation_frame(
+        state,
+        _event()["timestamp"],
+        initiated_by_ebusd=False,
+    )
     update_state(state, _event())
     state["checkpoint"] = {
         "device": 64518,
@@ -179,6 +189,10 @@ def test_bundle_is_deterministic_and_checksums_verify(tmp_path):
 
         shared = json.loads(archive.read("evidence/state.json"))
         assert shared["total_events"] == 1
+        assert shared["observation"]["frames_seen"] == 1
+        assert shared["observation"]["passive_frames"] == 1
+        assert shared["observation"]["ebusd_initiated_frames"] == 0
+        assert shared["observation"]["first_frame_timestamp"]["raw"] == "2026-10-01 10:00:00.000"
         assert "checkpoint" not in shared
 
         checksums = json.loads(archive.read("checksums.json"))["sha256"]
@@ -388,3 +402,35 @@ def test_bundle_rejects_system_identity_with_unapproved_device_field(tmp_path):
             state_path=state_path,
             system_path=system_path,
         )
+
+
+def test_verify_rejects_invalid_observation_counts(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original-observation.zip"
+    invalid = tmp_path / "invalid-observation.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src:
+        members = {name: src.read(name) for name in src.namelist()}
+
+    state = json.loads(members["evidence/state.json"])
+    state["observation"]["frames_seen"] = 9
+    members["evidence/state.json"] = (
+        json.dumps(state, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"]["evidence/state.json"] = hashlib.sha256(
+        members["evidence/state.json"]
+    ).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    with zipfile.ZipFile(invalid, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name in sorted(members):
+            dst.writestr(name, members[name])
+
+    with pytest.raises(BundleError, match="must sum to frames_seen"):
+        verify_bundle(invalid)
