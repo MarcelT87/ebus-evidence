@@ -182,7 +182,7 @@ ebus-evidence bundle \
   --output data/evidence-with-context-raw.zip
 ```
 
-The exporter deliberately omits local resume checkpoint details, absolute local paths, host metadata and credentials. Explicitly included context `.raw` files contain real eBUS payloads and should be reviewed before public sharing.
+The exporter deliberately omits local resume checkpoint details, absolute local paths, host metadata and credentials. It **does retain absolute evidence timestamps**, because observation windows and event timing are part of the research evidence. Review that time information before public sharing if the exact observation period is sensitive. Explicitly included context `.raw` files contain real eBUS payloads and should also be reviewed before public sharing.
 
 ## Community cross-installation test
 
