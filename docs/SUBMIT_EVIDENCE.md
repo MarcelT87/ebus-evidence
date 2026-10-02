@@ -139,6 +139,7 @@ install
 
 Related:
 
+- [Evidence bundle format v1](BUNDLE_FORMAT.md)
 - [Community cross-installation test](COMMUNITY_TEST.md)
 - [Privacy and troubleshooting](TROUBLESHOOTING.md)
 - [System identity](SYSTEM_IDENTITY.md)
