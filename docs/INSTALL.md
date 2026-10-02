@@ -422,7 +422,7 @@ ebus-evidence bundle \
   --output evidence.zip
 ```
 
-If context captures exist:
+If context captures exist, their metadata can be included while raw context remains excluded by default:
 
 ```bash
 ebus-evidence bundle \
@@ -432,15 +432,15 @@ ebus-evidence bundle \
   --output evidence.zip
 ```
 
-For a more conservative metadata-only export without raw context payloads:
+Only if you intentionally want reviewed raw context payloads inside the bundle:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --no-context-raw \
-  --output evidence-metadata.zip
+  --include-context-raw \
+  --output evidence-with-context-raw.zip
 ```
 
 Before sharing:
@@ -455,7 +455,7 @@ Expected:
 Status: VALID
 ```
 
-Raw context files contain real eBUS payloads from a small time window. Review them before publishing them.
+Raw context files are excluded by default. If you explicitly include them, they contain real eBUS payloads from a small time window and must be reviewed before publishing.
 
 ---
 
