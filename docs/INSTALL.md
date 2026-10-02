@@ -263,7 +263,8 @@ context-dir:  data/contexts
 raw log:      auto-discovered when possible
 ```
 
-Stop with:
+There is **no normal collection timer**. The command keeps following the raw
+log until you stop it yourself with:
 
 ```text
 Ctrl-C
@@ -283,11 +284,8 @@ A later run:
 
 reuses the saved checkpoint and resumes when continuity can be proven.
 
-For a short test:
-
-```bash
-./evidence collect --seconds 15
-```
+The optional `--seconds` argument is reserved for controlled diagnostics and
+automated tests. Beginners do not need it for normal collection.
 
 With a manual raw-log path:
 
