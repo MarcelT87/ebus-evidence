@@ -464,6 +464,26 @@ ebus-evidence watch \
 
 ---
 
+# 16A. A 60-second resumed watch shows more than 60 seconds of raw timestamps
+
+`--seconds` is a **wall-clock runtime limit for the watch process**, not a source-data time window.
+
+With a persistent state, watch resumes at the saved checkpoint. If raw-log data accumulated while watch was stopped, the next run processes that backlog before or while following the live end.
+
+For example, a 60-second run can legitimately process 10 or 20 minutes of raw-log timestamps if that amount of history accumulated since the previous checkpoint.
+
+This is intentional. It preserves observation continuity instead of silently jumping to the current end and losing the paused interval.
+
+Check the summary:
+
+```text
+resume=active
+```
+
+means the saved active-log checkpoint was resumed successfully.
+
+---
+
 # 17. Watch reports a checkpoint/resume error
 
 The persisted state contains a checkpoint that identifies the raw-log history.
