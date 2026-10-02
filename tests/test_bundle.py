@@ -350,6 +350,30 @@ def test_bundle_preserves_historical_epoch_and_excludes_old_contexts(tmp_path):
     assert verified["context_raw_count"] == 0
 
 
+def test_read_only_rollover_preview_bundle_is_deterministic(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    before = state_path.read_bytes()
+    upgraded = _upgraded_profile()
+
+    first = tmp_path / "preview-one.zip"
+    second = tmp_path / "preview-two.zip"
+
+    result1 = create_bundle(first, upgraded, state_path=state_path)
+    result2 = create_bundle(second, upgraded, state_path=state_path)
+
+    assert first.read_bytes() == second.read_bytes()
+    assert result1["sha256"] == result2["sha256"]
+    assert state_path.read_bytes() == before
+
+    verified = verify_bundle(first)
+    assert verified["valid"] is True
+    assert verified["deterministic_layout"] is True
+    assert verified["historical_epoch_count"] == 1
+    assert verified["historical_frames"] == 1
+    assert verified["observation"]["frames_seen"] == 0
+
+
 def test_verify_accepts_legacy_shared_state_without_epoch_fields(tmp_path):
     state_path = tmp_path / "state.json"
     _write_state(state_path)
