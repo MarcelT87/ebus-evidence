@@ -639,7 +639,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     system.add_argument(
         "--model",
-        help="optional user-declared product model, e.g. 105/6 A",
+        help="optional user-declared product model",
     )
     system.add_argument(
         "--output",
