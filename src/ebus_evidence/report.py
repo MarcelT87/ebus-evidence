@@ -18,7 +18,10 @@ def shareable_report(report: dict[str, Any]) -> dict[str, Any]:
     """Return a JSON-safe report without local absolute source paths."""
     exported = deepcopy(report)
     exported.pop("raw_path", None)
-    exported["privacy"] = {"absolute_paths_included": False}
+    exported["privacy"] = {
+        "absolute_paths_included": False,
+        "absolute_timestamps_included": True,
+    }
     return exported
 
 
