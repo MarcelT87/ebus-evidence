@@ -5,11 +5,17 @@ import shutil
 import tempfile
 
 from ebus_evidence.bundle import BundleError, create_bundle, verify_bundle
+from ebus_evidence.context import ContextError, context_metadata_scope
 from ebus_evidence.discovery.ebusd import discover_ebusd
 from ebus_evidence.importer import StaticImportError, import_sources
 from ebus_evidence.input.raw_file import resolve_raw_sources
 from ebus_evidence.profiles.loader import ProfileError, load_profile
-from ebus_evidence.state import EvidenceStateStore, StateError
+from ebus_evidence.state import (
+    EvidenceStateStore,
+    ProfileRolloverRequired,
+    StateError,
+    load_state,
+)
 from ebus_evidence.system_identity import SystemIdentityError, load_system_document
 from ebus_evidence.timeutil import TimezoneError, get_timezone
 from ebus_evidence.watch import ResumeError, run_watch
@@ -150,7 +156,11 @@ def collect(
     contexts.mkdir(parents=True, exist_ok=True)
 
     try:
-        store = EvidenceStateStore.open(state_file, profile)
+        store = EvidenceStateStore.open(
+            state_file,
+            profile,
+            allow_profile_rollover=True,
+        )
         if reset_checkpoint:
             store.clear_checkpoint(
                 reason="user acknowledged a resume gap with --reset-checkpoint"
@@ -160,6 +170,7 @@ def collect(
         return 2
 
     existing_frames = int(store.state["observation"]["frames_seen"])
+    historical_frames = store.historical_frames
 
     print("eBUS Evidence collection")
     print()
@@ -167,7 +178,18 @@ def collect(
     print(f"Profile ............. {profile['name']} (v{profile.get('version', 1)})")
     print(f"Evidence state ...... {state_file}")
     print(f"Contexts ............ {contexts}")
-    print(f"Previously observed . {existing_frames} frames")
+    print(f"Previously observed . {existing_frames} active frames")
+    if historical_frames:
+        print(
+            f"Historical epochs ... {len(store.historical_epochs)} "
+            f"({historical_frames} frames)"
+        )
+    if store.rolled_over_from is not None:
+        print(
+            f"Profile rollover .... v{store.rolled_over_from} -> "
+            f"v{profile.get('version', 1)}"
+        )
+        print("Previous coverage was archived; the new epoch starts at 0 frames.")
     print()
     print("Mode: passive / read-only")
     if seconds is None:
@@ -208,7 +230,12 @@ def collect(
     print()
     print("Collection complete.")
     print()
-    print(f"Frames observed ...... {observation['frames_seen']}")
+    print(f"Frames observed ...... {observation['frames_seen']} (active epoch)")
+    if final_store.historical_epochs:
+        print(
+            f"Historical epochs .... {len(final_store.historical_epochs)} "
+            f"({final_store.historical_frames} frames)"
+        )
     print(f"Passive frames ....... {observation['passive_frames']}")
     print(f"ebusd initiated ....... {observation['ebusd_initiated_frames']}")
     print(f"Evidence events ....... {final_store.total_events}")
@@ -383,20 +410,62 @@ def status(
     print(f"Profile ............. {profile['name']} (v{profile.get('version', 1)})")
 
     state_file = Path(state_path)
-    state_ready = False
     state_has_observation = False
+    state_invalid = False
+    rollover_pending = False
     if state_file.is_file():
         try:
             store = EvidenceStateStore.open(state_file, profile)
+        except ProfileRolloverRequired as exc:
+            rollover_pending = True
+            try:
+                preview = load_state(
+                    state_file,
+                    profile,
+                    allow_profile_rollover=True,
+                )
+            except StateError as preview_exc:
+                state_invalid = True
+                print(f"Evidence state ...... invalid ({preview_exc})")
+            else:
+                preview_epochs = preview.get("epochs", [])
+                preview_historical_frames = sum(
+                    int(epoch["observation"]["frames_seen"])
+                    for epoch in preview_epochs
+                    if isinstance(epoch, dict)
+                    and isinstance(epoch.get("observation"), dict)
+                )
+                preview_active_frames = int(
+                    preview.get("observation", {}).get("frames_seen", 0)
+                )
+                state_has_observation = (
+                    preview_historical_frames + preview_active_frames
+                ) > 0
+                print(
+                    "Evidence state ...... profile rollover pending "
+                    f"(v{exc.current_version} -> v{exc.requested_version})"
+                )
+                print(
+                    f"Historical epochs ... {len(preview_epochs)} "
+                    f"({preview_historical_frames} frames after rollover)"
+                )
+                print(
+                    "Rollover preview .... read-only; collect/watch persists it"
+                )
         except StateError as exc:
+            state_invalid = True
             print(f"Evidence state ...... invalid ({exc})")
         else:
-            state_ready = True
             observation = store.state["observation"]
-            state_has_observation = int(observation["frames_seen"]) > 0
+            state_has_observation = store.total_observed_frames > 0
             print(f"Evidence state ...... present ({state_file})")
-            print(f"Frames observed ..... {observation['frames_seen']}")
-            print(f"Evidence events ..... {store.total_events}")
+            print(f"Frames observed ..... {observation['frames_seen']} (active epoch)")
+            if store.historical_epochs:
+                print(
+                    f"Historical epochs ... {len(store.historical_epochs)} "
+                    f"({store.historical_frames} frames)"
+                )
+            print(f"Evidence events ..... {store.total_events} (active epoch)")
             first = observation.get("first_frame_timestamp")
             last = observation.get("last_frame_timestamp")
             if isinstance(first, dict):
@@ -407,12 +476,26 @@ def status(
         print(f"Evidence state ...... missing ({state_file})")
 
     contexts = Path(context_dir)
-    context_count = (
-        len(list(contexts.glob("*.json")))
-        if contexts.is_dir()
-        else 0
-    )
-    print(f"Context metadata .... {context_count}")
+    current_context_count = 0
+    historical_context_count = 0
+    context_invalid = False
+    if contexts.is_dir():
+        try:
+            context_scope = context_metadata_scope(contexts, profile)
+        except ContextError as exc:
+            context_invalid = True
+            print(f"Context metadata .... invalid ({exc})")
+        else:
+            current_context_count = len(context_scope.current)
+            historical_context_count = len(context_scope.historical)
+            print(f"Context metadata .... {current_context_count} current")
+            if historical_context_count:
+                print(
+                    f"Historical contexts . {historical_context_count} "
+                    "(kept local; excluded from current-profile export)"
+                )
+    else:
+        print("Context metadata .... 0 current")
 
     system_file = Path(system_path)
     if system_file.is_file():
@@ -428,17 +511,26 @@ def status(
     else:
         print("System identity ..... absent (optional)")
 
-    ready = state_has_observation or context_count > 0
+    ready = (
+        (state_has_observation or current_context_count > 0)
+        and not state_invalid
+        and not context_invalid
+    )
     print()
     print(f"Ready to export ..... {'YES' if ready else 'NO'}")
     if ready:
         print()
         print("Next:")
         print("  ./evidence export")
+        if rollover_pending:
+            print("  # export previews rollover read-only; collect persists it")
     else:
         print()
         print("Next:")
-        print("  ./evidence collect")
+        if rollover_pending:
+            print("  ./evidence collect   # starts the new profile observation epoch")
+        else:
+            print("  ./evidence collect")
     return 0
 
 
@@ -465,22 +557,47 @@ def export(
     state_arg = state_file if state_file.is_file() else None
     context_arg = contexts if contexts.is_dir() else None
     system_arg = system_file if system_file.is_file() else None
-    context_count = (
-        len(list(contexts.glob("*.json")))
-        if context_arg is not None
-        else 0
-    )
+
+    current_context_count = 0
+    historical_context_count = 0
+    if context_arg is not None:
+        try:
+            context_scope = context_metadata_scope(contexts, profile)
+        except ContextError as exc:
+            print(f"error: context metadata is invalid: {exc}")
+            return 2
+        current_context_count = len(context_scope.current)
+        historical_context_count = len(context_scope.historical)
 
     state_frames = 0
+    rollover_preview: tuple[int, int] | None = None
     if state_arg is not None:
         try:
             store = EvidenceStateStore.open(state_arg, profile)
+        except ProfileRolloverRequired as exc:
+            try:
+                preview = load_state(
+                    state_arg,
+                    profile,
+                    allow_profile_rollover=True,
+                )
+            except StateError as preview_exc:
+                print(f"error: collected evidence state is invalid: {preview_exc}")
+                return 2
+            rollover_preview = (exc.current_version, exc.requested_version)
+            state_frames = int(preview["observation"]["frames_seen"]) + sum(
+                int(epoch["observation"]["frames_seen"])
+                for epoch in preview.get("epochs", [])
+                if isinstance(epoch, dict)
+                and isinstance(epoch.get("observation"), dict)
+            )
         except StateError as exc:
             print(f"error: collected evidence state is invalid: {exc}")
             return 2
-        state_frames = int(store.state["observation"]["frames_seen"])
+        else:
+            state_frames = store.total_observed_frames
 
-    if state_frames == 0 and context_count == 0:
+    if state_frames == 0 and current_context_count == 0:
         print("error: no observed evidence is ready to export")
         if state_arg is not None:
             print(
@@ -501,9 +618,15 @@ def export(
     print()
     print(f"Profile ............. {profile['name']} (v{profile.get('version', 1)})")
     print(f"Evidence state ...... {'included' if state_arg else 'not present'}")
+    if rollover_preview is not None:
+        print(
+            f"Profile rollover .... v{rollover_preview[0]} -> "
+            f"v{rollover_preview[1]} (read-only preview)"
+        )
+        print("Local state ......... unchanged until collect/watch persists rollover")
     print(
         f"Context metadata .... "
-        f"{context_count}"
+        f"{current_context_count}"
     )
     print(f"System identity ..... {'included' if system_arg else 'not present'}")
     print(
@@ -541,6 +664,16 @@ def export(
         f"{'yes' if verified['system_identity_included'] else 'no'}"
     )
     print(f"Context metadata .... {verified['context_metadata_count']}")
+    if historical_context_count:
+        print(
+            f"Historical contexts . {historical_context_count} "
+            "(kept local; excluded)"
+        )
+    if verified.get("historical_epoch_count", 0):
+        print(
+            f"Historical epochs .... {verified['historical_epoch_count']} "
+            f"({verified['historical_frames']} frames)"
+        )
     print(f"Raw context ......... {verified['context_raw_count']}")
     provenance = verified.get("provenance")
     if isinstance(provenance, dict):

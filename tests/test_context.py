@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from ebus_evidence.context import ContextCaptureManager, context_should_trigger
+from ebus_evidence.context import (
+    ContextCaptureManager,
+    ContextError,
+    context_metadata_scope,
+    context_should_trigger,
+)
 from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.watch import run_watch
 
@@ -233,3 +238,62 @@ def test_pre_window_incomplete_when_collection_started_too_late(tmp_path):
 
     metadata = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
     assert metadata["pre_window_complete"] is False
+
+
+def _write_context_metadata(path, *, profile_name: str, profile_version: int):
+    path.write_text(
+        json.dumps(
+            {
+                "format": "ebus-evidence-context-v1",
+                "profile": profile_name,
+                "profile_version": profile_version,
+                "check_id": "rare",
+                "description": "Rare value",
+                "before_seconds": 0,
+                "after_seconds": 0,
+                "pre_window_complete": True,
+                "post_window_complete": True,
+                "trigger_count": 1,
+                "triggers": [],
+                "record_count": 0,
+                "raw_file": path.with_suffix(".raw").name,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_context_scope_separates_historical_profile_versions(tmp_path):
+    current_profile = {**_profile(), "version": 3}
+    _write_context_metadata(
+        tmp_path / "old.json",
+        profile_name=current_profile["name"],
+        profile_version=2,
+    )
+    _write_context_metadata(
+        tmp_path / "current.json",
+        profile_name=current_profile["name"],
+        profile_version=3,
+    )
+
+    scope = context_metadata_scope(tmp_path, current_profile)
+
+    assert [path.name for path in scope.current] == ["current.json"]
+    assert [path.name for path in scope.historical] == ["old.json"]
+
+
+def test_context_scope_rejects_future_profile_version(tmp_path):
+    current_profile = {**_profile(), "version": 3}
+    _write_context_metadata(
+        tmp_path / "future.json",
+        profile_name=current_profile["name"],
+        profile_version=4,
+    )
+
+    import pytest
+
+    with pytest.raises(ContextError, match="newer than active"):
+        context_metadata_scope(tmp_path, current_profile)

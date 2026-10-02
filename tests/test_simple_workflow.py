@@ -21,6 +21,63 @@ def _matching_record(timestamp: str) -> bytes:
     ).encode("ascii")
 
 
+def _write_rollover_profiles(tmp_path):
+    v2 = tmp_path / "rollover-v2.yaml"
+    v3 = tmp_path / "rollover-v3.yaml"
+
+    base_check = """
+  - id: old_check
+    description: Existing v2 check
+    match:
+      source: "f1"
+      target: "08"
+      pbsb: "b509"
+      request: "05540200ba08"
+    value:
+      from: response
+      type: u8
+      offset: 5
+    context:
+      when:
+        value_nonzero: true
+      before_seconds: 0
+      after_seconds: 0
+"""
+
+    v2.write_text(
+        (
+            "name: rollover-test\n"
+            "version: 2\n"
+            "checks:\n"
+            + base_check
+        ),
+        encoding="utf-8",
+    )
+    v3.write_text(
+        (
+            "name: rollover-test\n"
+            "version: 3\n"
+            "checks:\n"
+            + base_check
+            + """
+  - id: new_v3_check
+    description: New v3-only check
+    match:
+      source: "f1"
+      target: "08"
+      pbsb: "b509"
+      request: "05540200a80e"
+    value:
+      from: response
+      type: float32le
+      offset: 5
+"""
+        ),
+        encoding="utf-8",
+    )
+    return v2, v3
+
+
 def test_beginner_collect_resume_status_export_flow(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     raw = tmp_path / "ebusd.raw"
@@ -57,6 +114,184 @@ def test_beginner_collect_resume_status_export_flow(tmp_path, monkeypatch):
     assert verified["deterministic_layout"] is True
     assert verified["state_included"] is True
     assert verified["context_raw_count"] == 0
+
+
+def test_beginner_profile_rollover_preserves_old_coverage_without_replay(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    profile_v2_path, profile_v3_path = _write_rollover_profiles(tmp_path)
+    profile_v2 = load_profile(profile_v2_path)
+    profile_v3 = load_profile(profile_v3_path)
+
+    raw = tmp_path / "ebusd.raw"
+    raw.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    # First run establishes a fresh-end checkpoint for v2.
+    assert main(
+        [
+            "collect",
+            "--raw",
+            str(raw),
+            "--profile",
+            str(profile_v2_path),
+            "--seconds",
+            "0",
+        ]
+    ) == 0
+
+    with raw.open("ab") as handle:
+        handle.write(_matching_record("2026-10-01 10:00:01.000"))
+
+    # v2 observes one frame/event and captures one v2 context.
+    assert main(
+        [
+            "collect",
+            "--raw",
+            str(raw),
+            "--profile",
+            str(profile_v2_path),
+            "--seconds",
+            "0",
+        ]
+    ) == 0
+
+    state_path = tmp_path / "data" / "evidence-state.json"
+    context_dir = tmp_path / "data" / "contexts"
+    before = EvidenceStateStore.open(state_path, profile_v2)
+    before_checkpoint = before.checkpoint
+    assert before.state["observation"]["frames_seen"] == 1
+    assert before.state["checks"]["old_check"]["matches"] == 1
+    old_contexts = list(context_dir.glob("*.json"))
+    assert len(old_contexts) == 1
+    old_context = json.loads(old_contexts[0].read_text(encoding="utf-8"))
+    assert old_context["profile_version"] == 2
+
+    # Reader paths do not mutate the state. They tell the beginner to collect
+    # once so the writer can perform the profile rollover under its state lock.
+    capsys.readouterr()
+    assert main(
+        [
+            "status",
+            "--raw",
+            str(raw),
+            "--profile",
+            str(profile_v3_path),
+        ]
+    ) == 0
+    status_out = capsys.readouterr().out
+    assert "profile rollover pending (v2 -> v3)" in status_out
+    assert "Rollover preview .... read-only" in status_out
+    assert "Ready to export ..... YES" in status_out
+
+    # Export can represent the rollover read-only, which keeps static-import-only
+    # installations usable even before a writer persists the new epoch locally.
+    assert main(["export", "--profile", str(profile_v3_path)]) == 0
+    export_before_out = capsys.readouterr().out
+    assert "Profile rollover .... v2 -> v3 (read-only preview)" in export_before_out
+    assert "Local state ......... unchanged until collect/watch persists rollover" in export_before_out
+    assert "Historical contexts . 1 (kept local; excluded)" in export_before_out
+    assert "Historical epochs .... 1 (1 frames)" in export_before_out
+
+    preview_verified = verify_bundle(tmp_path / "data" / "evidence.zip")
+    assert preview_verified["valid"] is True
+    assert preview_verified["profile_version"] == 3
+    assert preview_verified["historical_epoch_count"] == 1
+    assert preview_verified["historical_frames"] == 1
+    assert preview_verified["observation"]["frames_seen"] == 0
+
+    unchanged_local = json.loads(state_path.read_text(encoding="utf-8"))
+    assert unchanged_local["profile_version"] == 2
+    assert "epochs" not in unchanged_local or unchanged_local["epochs"] == []
+
+    # No new raw bytes are appended here. Persisted rollover must not replay old data.
+    assert main(
+        [
+            "collect",
+            "--raw",
+            str(raw),
+            "--profile",
+            str(profile_v3_path),
+            "--seconds",
+            "0",
+        ]
+    ) == 0
+    rollover_out = capsys.readouterr().out
+    assert "Profile rollover .... v2 -> v3" in rollover_out
+    assert "new epoch starts at 0 frames" in rollover_out
+
+    rolled = EvidenceStateStore.open(state_path, profile_v3)
+    assert rolled.checkpoint == before_checkpoint
+    assert rolled.state["observation"]["frames_seen"] == 0
+    assert rolled.state["checks"]["old_check"]["matches"] == 0
+    assert rolled.state["checks"]["new_v3_check"]["matches"] == 0
+    assert rolled.historical_frames == 1
+    assert len(rolled.historical_epochs) == 1
+
+    epoch = rolled.historical_epochs[0]
+    assert epoch["profile_version"] == 2
+    assert epoch["observation"]["frames_seen"] == 1
+    assert epoch["checks"]["old_check"]["matches"] == 1
+    assert "new_v3_check" not in epoch["checks"]
+
+    # The v2 context stays on disk but is not mislabeled/exported as v3.
+    assert old_contexts[0].is_file()
+
+    assert main(["export", "--profile", str(profile_v3_path)]) == 0
+    export_after_out = capsys.readouterr().out
+    assert "Historical contexts . 1 (kept local; excluded)" in export_after_out
+    assert "Historical epochs .... 1 (1 frames)" in export_after_out
+
+    verified = verify_bundle(tmp_path / "data" / "evidence.zip")
+    assert verified["valid"] is True
+    assert verified["profile_version"] == 3
+    assert verified["historical_epoch_count"] == 1
+    assert verified["historical_frames"] == 1
+    assert verified["observation"]["frames_seen"] == 0
+    assert verified["context_metadata_count"] == 0
+
+    # Only new bytes after rollover count toward v3 coverage.
+    with raw.open("ab") as handle:
+        handle.write(_matching_record("2026-10-01 10:00:02.000"))
+
+    assert main(
+        [
+            "collect",
+            "--raw",
+            str(raw),
+            "--profile",
+            str(profile_v3_path),
+            "--seconds",
+            "0",
+        ]
+    ) == 0
+
+    after_new_data = EvidenceStateStore.open(state_path, profile_v3)
+    assert after_new_data.state["observation"]["frames_seen"] == 1
+    assert after_new_data.state["checks"]["old_check"]["matches"] == 1
+    assert after_new_data.state["checks"]["new_v3_check"]["matches"] == 0
+    assert after_new_data.historical_frames == 1
+
+
+def test_status_is_not_ready_when_context_metadata_is_invalid(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied.raw"
+    raw.write_bytes(
+        _record("2026-10-01 10:00:00.000")
+        + _matching_record("2026-10-01 10:00:01.000")
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    context_file = next((tmp_path / "data" / "contexts").glob("*.json"))
+    context_file.write_text("{invalid", encoding="utf-8")
+
+    capsys.readouterr()
+    assert main(["status", "--raw", str(raw)]) == 0
+    out = capsys.readouterr().out
+    assert "Context metadata .... invalid" in out
+    assert "Ready to export ..... NO" in out
 
 
 def test_export_automatically_includes_valid_system_identity(tmp_path, monkeypatch):

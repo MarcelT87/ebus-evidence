@@ -296,7 +296,11 @@ def _watch_unlocked(args: argparse.Namespace) -> int:
 
     if args.state:
         try:
-            state_store = EvidenceStateStore.open(args.state, profile)
+            state_store = EvidenceStateStore.open(
+                args.state,
+                profile,
+                allow_profile_rollover=True,
+            )
             if args.reset_checkpoint:
                 state_store.clear_checkpoint(
                     reason="user acknowledged a resume gap with --reset-checkpoint"
@@ -304,7 +308,18 @@ def _watch_unlocked(args: argparse.Namespace) -> int:
         except StateError as exc:
             print(f"error: cannot open evidence state: {exc}", file=sys.stderr)
             return 2
-        print(f"State: {args.state} ({state_store.total_events} existing events)")
+        print(f"State: {args.state} ({state_store.total_events} active-epoch events)")
+        if state_store.rolled_over_from is not None:
+            print(
+                "Profile rollover: "
+                f"v{state_store.rolled_over_from} -> v{profile.get('version', 1)}; "
+                "previous coverage archived as a historical epoch"
+            )
+        if state_store.historical_epochs:
+            print(
+                f"Historical epochs: {len(state_store.historical_epochs)} "
+                f"({state_store.historical_frames} frames)"
+            )
         if args.reset_checkpoint:
             print("Checkpoint: reset; continuity gap recorded")
         elif state_store.checkpoint is None:
@@ -477,6 +492,11 @@ def _bundle(args: argparse.Namespace) -> int:
         f"{result['manifest']['context_metadata_count']} metadata, "
         f"{result['manifest']['context_raw_count']} raw"
     )
+    if result.get("historical_context_metadata_excluded"):
+        print(
+            "Historical contexts excluded: "
+            f"{result['historical_context_metadata_excluded']}"
+        )
     print(f"State included: {'yes' if result['manifest']['evidence_state_included'] else 'no'}")
     state_summary = result.get("state_summary")
     observation = (
@@ -492,6 +512,22 @@ def _bundle(args: argparse.Namespace) -> int:
             f"ebusd_initiated={observation['ebusd_initiated_frames']} "
             f"non_frames={observation['non_frames']} "
             f"skipped={observation['skipped']}"
+        )
+    epochs = (
+        state_summary.get("epochs", [])
+        if isinstance(state_summary, dict)
+        else []
+    )
+    if isinstance(epochs, list) and epochs:
+        historical_frames = sum(
+            int(epoch["observation"]["frames_seen"])
+            for epoch in epochs
+            if isinstance(epoch, dict)
+            and isinstance(epoch.get("observation"), dict)
+        )
+        print(
+            f"Historical epochs: {len(epochs)} "
+            f"({historical_frames} frames)"
         )
     print(
         "System identity: "
@@ -532,6 +568,11 @@ def _verify(args: argparse.Namespace) -> int:
     print(f"SHA256: {result['sha256']}")
     print(f"Profile: {result['profile']} (v{result['profile_version']})")
     print(f"Created by tool version: {result['tool_version']}")
+    if result.get("historical_epoch_count", 0):
+        print(
+            f"Historical epochs: {result['historical_epoch_count']} "
+            f"({result['historical_frames']} frames)"
+        )
     provenance = result.get("provenance")
     if isinstance(provenance, dict):
         runtime = provenance["tool_runtime"]

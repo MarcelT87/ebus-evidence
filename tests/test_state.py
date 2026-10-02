@@ -4,9 +4,11 @@ import pytest
 
 from ebus_evidence.state import (
     EvidenceStateStore,
+    ProfileRolloverRequired,
     StateError,
     load_state,
     new_state,
+    profile_fingerprint,
     update_observation_frame,
     update_observation_non_frame,
     update_observation_skip,
@@ -63,15 +65,120 @@ def test_state_store_persists_and_reloads(tmp_path):
     assert not (tmp_path / "state.json.tmp").exists()
 
 
-def test_state_rejects_different_profile_version(tmp_path):
+def test_state_requires_rollover_for_newer_profile_version(tmp_path):
     path = tmp_path / "state.json"
     state = new_state(PROFILE)
     path.write_text(json.dumps(state), encoding="utf-8")
 
-    incompatible = dict(PROFILE)
-    incompatible["version"] = 4
-    with pytest.raises(StateError, match="version mismatch"):
-        load_state(path, incompatible)
+    upgraded = {
+        **PROFILE,
+        "version": 4,
+        "checks": PROFILE["checks"]
+        + [{"id": "check_b", "description": "Check B", "match": {}}],
+    }
+    with pytest.raises(ProfileRolloverRequired, match="v3 -> v4"):
+        load_state(path, upgraded)
+
+
+def test_state_rollover_archives_old_coverage_and_preserves_checkpoint(tmp_path):
+    path = tmp_path / "state.json"
+    store = EvidenceStateStore.open(path, PROFILE)
+    timestamp = _event()["timestamp"]
+    store.observe_frame(timestamp, initiated_by_ebusd=False, save=False)
+    store.add(_event(), save=False)
+    checkpoint = {
+        "device": 11,
+        "inode": 22,
+        "offset": 333,
+        "anchor_start": 77,
+        "anchor_sha256": "a" * 64,
+    }
+    store.set_checkpoint(checkpoint, save=False)
+    store.save()
+
+    upgraded = {
+        **PROFILE,
+        "version": 4,
+        "checks": PROFILE["checks"]
+        + [{"id": "check_b", "description": "Check B", "match": {}}],
+    }
+    rolled = EvidenceStateStore.open(
+        path,
+        upgraded,
+        allow_profile_rollover=True,
+    )
+
+    assert rolled.rolled_over_from == 3
+    assert rolled.checkpoint == checkpoint
+    assert rolled.state["profile_version"] == 4
+    assert rolled.state["profile_fingerprint"] == profile_fingerprint(upgraded)
+    assert rolled.state["observation"]["frames_seen"] == 0
+    assert rolled.total_events == 0
+    assert rolled.state["checks"]["check_a"]["matches"] == 0
+    assert rolled.state["checks"]["check_b"]["matches"] == 0
+
+    assert len(rolled.historical_epochs) == 1
+    epoch = rolled.historical_epochs[0]
+    assert epoch["profile_version"] == 3
+    assert epoch["profile_fingerprint"] == profile_fingerprint(PROFILE)
+    assert epoch["observation"]["frames_seen"] == 1
+    assert epoch["total_events"] == 1
+    assert epoch["checks"]["check_a"]["matches"] == 1
+    assert "check_b" not in epoch["checks"]
+    assert rolled.historical_frames == 1
+    assert rolled.total_observed_frames == 1
+
+    persisted = EvidenceStateStore.open(path, upgraded)
+    assert persisted.rolled_over_from is None
+    assert persisted.checkpoint == checkpoint
+    assert len(persisted.historical_epochs) == 1
+
+
+def test_state_rejects_profile_downgrade(tmp_path):
+    path = tmp_path / "state.json"
+    state = new_state(PROFILE)
+    state["profile_version"] = 4
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    with pytest.raises(StateError, match="downgrade"):
+        load_state(path, PROFILE)
+
+
+def test_state_rejects_semantic_change_without_version_bump(tmp_path):
+    path = tmp_path / "state.json"
+    state = new_state(PROFILE)
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    changed = {
+        **PROFILE,
+        "checks": [
+            {
+                **PROFILE["checks"][0],
+                "match": {"source": "f1"},
+            }
+        ],
+    }
+    with pytest.raises(StateError, match="semantics changed without"):
+        load_state(path, changed)
+
+
+def test_state_allows_description_only_change_without_version_bump(tmp_path):
+    path = tmp_path / "state.json"
+    state = new_state(PROFILE)
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    changed = {
+        **PROFILE,
+        "description": "presentation-only change",
+        "checks": [
+            {
+                **PROFILE["checks"][0],
+                "description": "Updated label only",
+            }
+        ],
+    }
+    loaded = load_state(path, changed)
+    assert loaded["profile_fingerprint"] == profile_fingerprint(PROFILE)
 
 
 def test_state_rejects_different_profile_name(tmp_path):
@@ -106,6 +213,18 @@ def test_state_checkpoint_persists_and_can_be_cleared(tmp_path):
     assert again.checkpoint is None
     assert len(again.state["continuity"]["resets"]) == 1
     assert again.state["continuity"]["resets"][0]["reason"] == "test reset"
+
+
+def test_old_state_without_epoch_metadata_is_backward_compatible(tmp_path):
+    path = tmp_path / "state.json"
+    state = new_state(PROFILE)
+    state.pop("profile_fingerprint")
+    state.pop("epochs")
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    loaded = load_state(path, PROFILE)
+    assert loaded["profile_fingerprint"] == profile_fingerprint(PROFILE)
+    assert loaded["epochs"] == []
 
 
 def test_old_state_without_checkpoint_is_backward_compatible(tmp_path):

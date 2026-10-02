@@ -259,11 +259,13 @@ Top-level shape:
 {
   "format": "ebus-evidence-shared-state-v1",
   "profile": "hw5103-open-evidence",
-  "profile_version": 2,
+  "profile_version": 3,
+  "profile_fingerprint": "<64 lowercase hex characters>",
   "created_at": "...",
   "updated_at": "...",
   "total_events": 0,
   "observation": {},
+  "epochs": [],
   "continuity_reset_count": 0,
   "checks": {}
 }
@@ -282,6 +284,61 @@ offset
 anchor_start
 anchor_sha256
 ```
+
+### Observation epochs and profile rollover
+
+Current shared-state v1 may contain an `epochs` array.
+
+Each entry is a completed historical observation from an older version of the
+**same profile name**:
+
+```json
+{
+  "profile": "hw5103-open-evidence",
+  "profile_version": 2,
+  "profile_fingerprint": "<64 lowercase hex characters or null for legacy state>",
+  "created_at": "...",
+  "updated_at": "...",
+  "ended_at": "...",
+  "total_events": 123,
+  "observation": {},
+  "checks": {}
+}
+```
+
+Epoch versions are strictly increasing and must be lower than the active
+top-level `profile_version`.
+
+Coverage interpretation is deliberately epoch-scoped:
+
+- the top-level `observation` applies only to checks in the active profile;
+- a historical epoch's `observation` applies only to the checks stored in that
+  epoch;
+- a check introduced in profile v3 must **not** be treated as observed during a
+  v2 epoch.
+
+On a local profile-version rollover, the raw-log checkpoint remains local and is
+preserved for resume, but it is never exported. The active epoch starts at zero
+frames and continues from that checkpoint without replaying earlier traffic.
+
+Bundle creation may also preview a forward rollover entirely in memory when the
+local state still belongs to an older profile version. This read-only preview
+produces the same historical/current epoch separation without modifying the
+local state; a later collector/watch writer persists the rollover.
+
+The rollover boundary timestamp is derived from the completed state's last
+persisted `updated_at`, not from the wall clock at export time. This keeps
+repeated read-only rollover previews deterministic. Coverage is determined by
+the epoch's observation counters/timestamps, not merely by `created_at` or
+`ended_at`.
+
+`profile_fingerprint` hashes profile behavior while ignoring presentation-only
+descriptions. Current local state uses it to reject silent semantic changes
+without a profile-version bump. Historical legacy epochs may have a null
+fingerprint when they were created before fingerprint tracking existed.
+
+Older bundle-v1 shared states may omit both `profile_fingerprint` and
+`epochs`; the current verifier accepts them as legacy state.
 
 ### Observation object
 
@@ -414,7 +471,13 @@ record_count
 raw_file
 ```
 
-The profile name/version must match the embedded profile.
+Context metadata included in a bundle must match the embedded active
+profile name/version.
+
+After a local profile rollover, older context metadata for the same profile name
+is kept on disk but excluded from the current-profile bundle rather than being
+silently relabeled. Historical state summaries remain available through
+`evidence/state.json` epochs.
 
 `raw_file` is a filename reference used for the corresponding optional
 `contexts/*.raw` member. Even when raw context is excluded from a normal
@@ -485,6 +548,11 @@ A future incompatible archive contract must use a new format identifier rather
 than silently changing the meaning of `ebus-evidence-bundle-v1`.
 
 Profile version changes are separate from bundle-format changes.
+
+Observation epochs are a backward-compatible extension of shared-state v1.
+Older verifiers may ignore the additional epoch fields; consumers that need
+profile-version coverage semantics should use a verifier that understands
+epochs.
 
 Current exporters add optional-compatible provenance inside bundle v1:
 a deterministic runtime-package SHA-256, the exact embedded profile SHA-256,

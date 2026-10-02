@@ -301,6 +301,24 @@ A later run:
 
 reuses the saved checkpoint and resumes when continuity can be proven.
 
+If a future update raises the bundled profile version, the first writer run
+automatically starts a new **observation epoch**:
+
+- the previous profile/version observation is preserved as historical evidence;
+- the raw-log checkpoint is preserved, so old traffic is not replayed;
+- the new profile version starts at 0 observed frames;
+- checks added by the new profile therefore do not inherit earlier coverage.
+
+`status` and `export` remain read-only. If they see a newer profile before
+the first post-update writer run, they preview the rollover in memory.
+`export` can already create a valid bundle containing the historical epoch and
+a zero-frame active epoch without modifying the local state. A later
+`collect`/expert `watch --state` persists that rollover under the normal
+single-writer lock.
+
+Historical context files remain local. Context metadata from an older profile
+version is not silently relabeled or exported as current-profile context.
+
 Only one state-writing process may use the same evidence state at a time.
 `collect`, `import`, and expert `watch --state` share the same local
 single-writer lock. If another writer is already using that state, the second
@@ -550,6 +568,26 @@ If you used the home-directory example during installation, that path is
 
 The installer reuses the existing `.venv` when possible and reinstalls the
 current checkout.
+
+If the update includes a newer evidence-profile version, no manual JSON editing
+or state deletion is needed.
+
+You may immediately inspect/export the old evidence with the new tool:
+
+```bash
+./evidence status
+./evidence export
+```
+
+Those commands preview the rollover read-only. When you next run:
+
+```bash
+./evidence collect
+```
+
+the tool persists the new active epoch and resumes from the saved raw-log
+checkpoint. Do not delete the old state merely because the profile version
+changed.
 
 Check:
 

@@ -526,19 +526,56 @@ Do not use `--reset-checkpoint` merely to hide an unexplained gap.
 
 ---
 
-# 18. Profile mismatch when reusing state
+# 18. Profile version changed / rollover pending
 
-A state file belongs to a profile name/version.
+A state file remains bound to one profile name, but newer versions of that same
+profile can roll forward safely.
 
-If the state was created by a different profile, do not force it into another one.
+Typical status after updating:
 
-Safer options:
+```text
+Evidence state ...... profile rollover pending (v2 -> v3)
+Rollover preview .... read-only; collect/watch persists it
+```
 
-- use the original profile;
-- create a new state filename for the new profile;
-- archive the old state separately.
+If the old state already contains evidence, `status` can still report
+`Ready to export YES`. A normal:
 
-Evidence aggregates from different profile definitions should not be silently mixed.
+```bash
+./evidence export
+```
+
+creates the new-profile bundle from an in-memory rollover preview and does not
+modify the local state. This keeps static-import-only installations usable.
+
+The next normal writer command:
+
+```bash
+./evidence collect
+```
+
+persists the same rollover under the state-writer lock. The tool then:
+
+- archives the old profile/version observation as a historical epoch;
+- keeps the existing raw-log checkpoint;
+- starts the new profile version with 0 active-epoch frames;
+- does not replay old traffic into new checks.
+
+Before or after persistence, the bundle retains the historical epoch and the
+new active profile starts with zero inherited coverage.
+
+Old context metadata stays on disk but is excluded from current-profile export
+unless it belongs to the active profile version.
+
+The tool still refuses unsafe cases:
+
+- a different profile name;
+- a profile downgrade;
+- changed profile semantics without a version bump;
+- malformed state/epoch metadata.
+
+Do not edit the state JSON to bypass those checks. If you intentionally want a
+completely separate observation, choose a new `--state` path instead.
 
 ---
 
