@@ -380,6 +380,20 @@ def run_watch(
         state_dirty = False
         last_state_flush = now
 
+    def observe_frame(frame: Frame) -> None:
+        nonlocal state_dirty
+        if state_store is not None:
+            state_store.observe_frame(
+                normalize_timestamp(
+                    frame.timestamp,
+                    source_timezone=source_timezone,
+                    display_timezone=display_timezone,
+                ),
+                initiated_by_ebusd=frame.initiated_by_ebusd,
+                save=False,
+            )
+            state_dirty = True
+
     def add_event(event: dict[str, Any]) -> None:
         nonlocal state_dirty
         stats.matches += 1
@@ -397,15 +411,23 @@ def run_watch(
             print(format_event(event), flush=True)
 
     def classify_non_frame(record: bytes, exc: RawNonFrame) -> None:
+        nonlocal state_dirty
         stats.non_frame_records += 1
+        if state_store is not None:
+            state_store.observe_non_frame(save=False)
+            state_dirty = True
         stats.non_frame_kinds[exc.kind] += 1
         samples = stats.non_frame_samples.setdefault(exc.kind, [])
         if len(samples) < 3:
             samples.append(_bounded_sample(record))
 
     def classify_skip(record: bytes, exc: RawParseError) -> None:
+        nonlocal state_dirty
         reason = str(exc)
         stats.skipped_records += 1
+        if state_store is not None:
+            state_store.observe_skip(save=False)
+            state_dirty = True
         stats.skip_reasons[reason] += 1
         samples = stats.skip_samples.setdefault(reason, [])
         if len(samples) < 3:
@@ -425,6 +447,7 @@ def run_watch(
                 continue
 
             stats.frames += 1
+            observe_frame(frame)
             for event in frame_events(
                 frame,
                 profile,
@@ -469,6 +492,7 @@ def run_watch(
                     final_checkpoint = end_checkpoint
                 else:
                     stats.frames += 1
+                    observe_frame(frame)
                     for event in frame_events(
                         frame,
                         profile,
