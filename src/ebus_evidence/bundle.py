@@ -223,6 +223,10 @@ def _load_contexts(
         return [], 0
 
     directory = Path(context_dir)
+    if not directory.exists():
+        raise BundleError(f"context directory not found: {directory}")
+    if not directory.is_dir():
+        raise BundleError(f"context path is not a directory: {directory}")
     try:
         scope = context_metadata_scope(directory, profile)
     except ContextError as exc:
