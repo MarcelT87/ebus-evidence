@@ -1,88 +1,27 @@
 # ebus-evidence
 
-`ebus-evidence` is a small, read-only companion tool for turning existing **ebusd message-mode raw logs** into reproducible evidence for cross-installation eBUS research.
+`ebus-evidence` turns existing **ebusd message-mode raw logs** into small, reproducible evidence for cross-installation eBUS research.
 
-It is intentionally conservative:
+It is deliberately passive:
 
 - no direct eBUS adapter access;
-- no eBUS writes;
+- no eBUS writes or telegram injection;
 - no active probing just to create evidence;
-- no automatic semantic naming;
-- no confidence scores;
-- no cloud upload.
+- no MQTT publishing;
+- no cloud upload;
+- no automatic semantic naming or confidence scores.
 
-The common input is a raw-log file already written by normal [ebusd](https://github.com/john30/ebusd).
-
-> **Current research scope:** the tool itself is built around normal ebusd message-mode raw logs, but the **bundled evidence profile and the current real-world validation are focused on Vaillant-family systems**, especially the current HW5103 research installation. Other eBUS manufacturers may still be parseable at the raw-log level, but the bundled `hw5103-open-evidence` profile is not intended to produce meaningful coverage for them yet.
-
-## What it can do
-
-- discover normal ebusd in Docker or as a native systemd service;
-- analyze existing message-mode raw logs;
-- match frames against small YAML evidence profiles;
-- count response/value variants;
-- follow new raw-log records passively;
-- resume after restarts with a rotation-aware checkpoint;
-- keep a compact persistent evidence state;
-- capture small context windows around explicit rare triggers;
-- create deterministic shareable ZIP bundles;
-- verify received bundles without extracting them.
-
-Current development version: `0.1.0.dev0`.
-
-## Start here
-
-Before installing anything, first identify **where ebusd runs**.
-
-| Your setup | Start here |
-|---|---|
-| Home Assistant OS with an eBUSd App/Add-on | **[Home Assistant](docs/HOME_ASSISTANT.md)** |
-| ebusd in Docker on a Linux host | **[Installation and first run](docs/INSTALL.md)** |
-| ebusd installed directly on Linux/systemd | **[Installation and first run](docs/INSTALL.md)** |
-| ebusd on another computer | **[Installation and first run](docs/INSTALL.md)** |
-| Not sure | **[Installation and first run](docs/INSTALL.md)** starts with identification steps |
-
-If you use **Home Assistant Container** on a normal Linux/Docker host, the important question is still where ebusd itself runs. See **[Home Assistant](docs/HOME_ASSISTANT.md)**.
-
-For a detailed explanation of Docker, native/systemd and remote ebusd installations, see:
-
-**[ebusd setup matrix](docs/EBUSD_SETUPS.md)**
-
-If something fails during installation, discovery, raw logging, watch/resume, bundle creation or verification, see:
-
-**[Troubleshooting](docs/TROUBLESHOOTING.md)**
-
-## Which setups are supported?
-
-The compatibility boundary is intentionally simple:
-
-| Data source | Current status |
-|---|---|
-| Normal ebusd in Docker + readable message-mode raw log | **Supported and real-world validated** |
-| Normal ebusd via native/systemd Linux + readable message-mode raw log | **Supported; more independent validation wanted** |
-| Existing normal ebusd message-mode raw-log file | **Supported** |
-| Normal ebusd on another computer | **Offline/file-based use supported** |
-| Home Assistant OS eBUSd App/Add-on | **File-based workflow supported; ebus-evidence itself runs elsewhere for now** |
-| Direct adapter access | **Intentionally not supported** |
-| ebusd `--lograwdata=bytes` | **Not supported** |
-
-The adapter connection itself is ebusd's job and does **not** require separate support in `ebus-evidence`.
+The normal data path is:
 
 ```text
-adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
+eBUS adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
 ```
 
-See **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** for the distinction between ebusd installation type, adapter transport and raw-log access.
+> **Current research scope:** the parser works on normal ebusd message-mode raw logs. The bundled `hw5103-open-evidence` profile and current real-world validation are focused on **Vaillant-family systems**, especially HW5103/HMU/VWZIO research paths.
 
-## 5-minute quick start
+## Quick start
 
-Requirements:
-
-- Python 3.11+
-- Git
-- an existing normal ebusd message-mode raw log, or a local Docker/systemd ebusd installation that can be discovered
-
-Install into your home directory:
+Requirements: Linux, Python 3.11+, Git, and a readable normal ebusd message-mode raw log.
 
 ```bash
 cd ~
@@ -91,26 +30,13 @@ cd ebus-evidence
 
 python3 -m venv .venv
 source .venv/bin/activate
-
 python -m pip install -e .
-```
 
-The repository is now normally at `~/ebus-evidence`. Keep generated evidence under its ignored `data/` directory rather than adding it to Git.
-
-Try automatic read-only discovery:
-
-```bash
 ebus-evidence doctor
+ebus-evidence analyze --profile hw5103-open-evidence
 ```
 
-Run an analysis:
-
-```bash
-ebus-evidence analyze \
-  --profile hw5103-open-evidence
-```
-
-If automatic discovery does not fit your setup, provide the raw log manually:
+If `doctor` cannot auto-discover your setup, use an explicit file:
 
 ```bash
 ebus-evidence doctor \
@@ -118,11 +44,9 @@ ebus-evidence doctor \
   --profile hw5103-open-evidence
 ```
 
-See **[docs/INSTALL.md](docs/INSTALL.md)** for the complete beginner guide, including how to enable ebusd raw logging.
+Do **not** use ebusd byte-mode logging (`--lograwdata=bytes`). The supported common input is normal message-mode raw logging.
 
-## Recommended long-running watch
-
-Once `doctor` and `analyze` work:
+## Persistent passive collection
 
 ```bash
 mkdir -p data/contexts
@@ -133,17 +57,13 @@ ebus-evidence watch \
   --context-dir data/contexts
 ```
 
-Stop with `Ctrl-C`.
+Stop with `Ctrl-C`. With a saved checkpoint, later runs resume from the previous raw-log position and may replay backlog written while watch was stopped.
 
-This follows the already existing raw log only. It does not generate eBUS traffic.
+Local runtime/evidence files belong under `data/`, which is ignored by Git.
 
-When a persistent state file is used, the shared evidence also records the observation scope: complete frames, passive vs. ebusd-initiated frames, non-frame/skipped counts and first/last observed frame timestamp.
+## Create and verify evidence
 
-## Share evidence
-
-For hardware/firmware comparison, first create a privacy-minimized `data/system.json` from an **existing** `ebusctl scan result` when one is available. See [System identity](docs/SYSTEM_IDENTITY.md). Do not start a new active scan merely for this project.
-
-Then create the normal privacy-first bundle:
+If you already have an existing `ebusctl scan result`, you can create a privacy-minimized system identity first. See [System identity](docs/SYSTEM_IDENTITY.md). Do not start a new active scan merely for this project.
 
 ```bash
 ebus-evidence bundle \
@@ -152,129 +72,52 @@ ebus-evidence bundle \
   --context-dir data/contexts \
   --system data/system.json \
   --output data/evidence.zip
-```
 
-If no existing system identity is available, omit the `--system` line.
-
-**Raw context files are excluded by default.** Context metadata can still be included.
-
-Verify it before sharing:
-
-```bash
 ebus-evidence verify data/evidence.zip
 ```
 
-A valid bundle reports:
+If no `data/system.json` exists, omit the `--system` line.
 
-```text
-Status: VALID
-```
+Raw context payloads are **excluded by default**. Shared evidence does retain absolute observation/evidence timestamps because timing is part of reproducible evidence; the bundle and verifier disclose this explicitly.
 
-Only when you have reviewed the raw context and intentionally want to share it:
+## Supported setups
 
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --context-dir data/contexts \
-  --system data/system.json \
-  --include-context-raw \
-  --output data/evidence-with-context-raw.zip
-```
+| Setup | Current status |
+|---|---|
+| normal ebusd in Docker + readable message-mode raw log | supported and real-world validated |
+| normal ebusd via native/systemd + readable message-mode raw log | supported; more independent validation wanted |
+| copied/read-only mounted message-mode raw log | supported |
+| Home Assistant OS eBUSd App/Add-on | file-based workflow |
+| direct adapter access | intentionally unsupported |
+| ebusd byte-mode raw log | unsupported |
 
-The exporter deliberately omits local resume checkpoint details, absolute local paths, host metadata and credentials. It **does retain absolute evidence timestamps**, because observation windows and event timing are part of the research evidence. Review that time information before public sharing if the exact observation period is sensitive. Explicitly included context `.raw` files contain real eBUS payloads and should also be reviewed before public sharing.
+The adapter transport used by ebusd is outside the evidence boundary.
 
-## Community cross-installation test
+## Documentation
 
-A minimal passive workflow for another installation is documented here:
-
-**[Community cross-installation test](docs/COMMUNITY_TEST.md)**
-
-For hardware/firmware comparisons, create a privacy-minimized system identity from an **existing** `ebusctl scan result`:
-
-**[System identity](docs/SYSTEM_IDENTITY.md)**
-
-Cross-installation evidence is the main reason this project exists.
-
-## Profiles
-
-Research questions live in YAML profiles rather than hard-coded semantic rules.
-
-The bundled `hw5103-open-evidence` profile currently contains a deliberately small set of evidence checks. More profiles can be added without changing the parser.
-
-A profile can match:
-
-- source;
-- target;
-- PB/SB;
-- exact request or request prefix;
-
-and may optionally decode a simple value from the normalized request or response.
-
-## Raw-log requirement
-
-`ebus-evidence` expects the normal **message-mode** raw log written by ebusd.
-
-Upstream ebusd exposes:
-
-```text
---lograwdata
---lograwdatafile=FILE
---lograwdatasize=SIZE
-```
-
-Do not use this for `ebus-evidence`:
-
-```text
---lograwdata=bytes
-```
-
-The full Docker and native examples are in **[docs/INSTALL.md](docs/INSTALL.md)**.
-
-## Safety and privacy
-
-The project is designed around passive evidence.
-
-It does not:
-
-- connect directly to the eBUS adapter;
-- call arbitrary active `ebusctl read` commands;
-- issue `ebusctl write`;
-- inject telegrams;
-- modify heating parameters;
-- publish MQTT messages;
-- upload data automatically.
-
-Generated runtime data such as `data/`, `*.raw`, `*.zip`, databases, environment files and private-note directories are ignored by the repository's `.gitignore` to reduce accidental commits.
+- **[Installation and first run](docs/INSTALL.md)** — complete beginner path
+- **[Home Assistant](docs/HOME_ASSISTANT.md)** — Home Assistant-specific route
+- **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** — Docker/native/remote layouts
+- **[System identity](docs/SYSTEM_IDENTITY.md)** — privacy-minimized hardware/firmware identity
+- **[Community test](docs/COMMUNITY_TEST.md)** — cross-installation contribution workflow
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** — symptom-based help
 
 ## Development
 
-Install the development dependencies:
-
 ```bash
+source .venv/bin/activate
 python -m pip install -e '.[dev]'
-pytest
+pytest -q
 ```
 
-The test suite uses synthetic fixtures and does not require a running heating system.
+Tests use synthetic fixtures and do not require a heating system.
 
 ## Relationship to ebusd
 
-[ebusd](https://github.com/john30/ebusd) is the eBUS daemon maintained by John30 and contributors.
+[ebusd](https://github.com/john30/ebusd) is a separate project maintained by John30 and contributors.
 
-`ebus-evidence` is an **independent community project**. It is not part of ebusd and is not presented as an official ebusd component or as being endorsed by the ebusd maintainers.
-
-This repository does not bundle or redistribute ebusd.
-
-Useful upstream references:
-
-- [ebusd repository](https://github.com/john30/ebusd)
-- [ebusd wiki](https://github.com/john30/ebusd/wiki)
-- [ebusd run options](https://github.com/john30/ebusd/wiki/2.-Run)
-- [ebusd Docker Compose example](https://github.com/john30/ebusd/blob/master/contrib/docker/docker-compose.example.yaml)
+`ebus-evidence` is an independent community project. It is not part of ebusd and does not bundle or redistribute ebusd.
 
 ## License
 
-`ebus-evidence` is released under the MIT License. See [LICENSE](LICENSE).
-
-ebusd is separate software with its own GPL-3.0 license.
+MIT. See [LICENSE](LICENSE).
