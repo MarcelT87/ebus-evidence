@@ -64,4 +64,4 @@ Before submitting, please confirm:
 - [ ] I did not paste passwords, tokens, IP addresses, serial numbers or unrelated host configuration.
 - [ ] I understand that attachments to this public issue should be treated as publicly shared data.
 
-See [Submit evidence](../../docs/SUBMIT_EVIDENCE.md) for the full submission guide.
+See the full submission guide: https://github.com/MarcelT87/ebus-evidence/blob/main/docs/SUBMIT_EVIDENCE.md
