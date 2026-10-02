@@ -61,6 +61,9 @@ def test_export_automatically_includes_valid_system_identity(tmp_path, monkeypat
     raw = tmp_path / "ebusd.raw"
     raw.write_bytes(_record("2026-10-01 10:00:00.000"))
     assert main(["collect", "--raw", str(raw), "--seconds", "0"]) == 0
+    with raw.open("ab") as handle:
+        handle.write(_matching_record("2026-10-01 10:00:01.000"))
+    assert main(["collect", "--raw", str(raw), "--seconds", "0"]) == 0
 
     data = tmp_path / "data"
     devices = parse_scan_result("08;Vaillant;HMU00;0902;5103;ignored\n")
@@ -82,5 +85,18 @@ def test_export_automatically_includes_valid_system_identity(tmp_path, monkeypat
 
 def test_export_requires_collected_evidence(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    assert main(["export"]) == 2
+    assert not (tmp_path / "data" / "evidence.zip").exists()
+
+
+def test_export_refuses_zero_frame_state(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "ebusd.raw"
+    raw.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    assert main(["collect", "--raw", str(raw), "--seconds", "0"]) == 0
+    assert (tmp_path / "data" / "evidence-state.json").is_file()
+
+    assert main(["status", "--raw", str(raw)]) == 0
     assert main(["export"]) == 2
     assert not (tmp_path / "data" / "evidence.zip").exists()
