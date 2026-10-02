@@ -186,6 +186,12 @@ The bundle exporter deliberately omits local resume metadata and does not add:
 
 The generated system identity contains only the approved technical identity fields plus the optional user-declared product manufacturer/model and the topology signature.
 
+The shared evidence state retains **absolute timestamps** for the observation window and matched evidence. This is intentional because timing is part of reproducible protocol evidence. If the exact dates/times of the observation are sensitive, review that information before public sharing. New bundles disclose this explicitly in `manifest.json` as:
+
+```text
+absolute_timestamps_included: true
+```
+
 If small context `.raw` files are explicitly included, they contain actual eBUS payloads from the bounded trigger window. Review them before posting publicly.
 
 For the first public exchange, use the default bundle behavior. Raw context is excluded unless `--include-context-raw` is explicitly supplied.
