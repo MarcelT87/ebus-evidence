@@ -279,6 +279,14 @@ def import_raw(
     print(f"Contexts captured ..... {stats.context_captures}")
     print(f"Non-frames ............ {stats.non_frames}")
     print(f"Skipped ............... {stats.skipped}")
+    if stats.non_frame_kinds:
+        print("Non-frame kinds:")
+        for kind, count in stats.non_frame_kinds.most_common():
+            print(f"  {count:>8}  {kind}")
+    if stats.skip_reasons:
+        print("Skip reasons:")
+        for reason, count in stats.skip_reasons.most_common():
+            print(f"  {count:>8}  {reason}")
     print()
     print(f"State saved: {state_file}")
     print()
