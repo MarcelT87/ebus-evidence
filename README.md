@@ -101,6 +101,7 @@ The adapter transport used by ebusd is outside the evidence boundary.
 - **[System identity](docs/SYSTEM_IDENTITY.md)** — privacy-minimized hardware/firmware identity
 - **[Community test](docs/COMMUNITY_TEST.md)** — cross-installation contribution workflow
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** — symptom-based help
+- **[Project boundaries](docs/PROJECT_BOUNDARIES.md)** — what this repository owns and what stays outside it
 
 ## Development
 
