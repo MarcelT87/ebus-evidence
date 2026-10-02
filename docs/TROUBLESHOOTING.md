@@ -473,13 +473,18 @@ ebus-evidence watch \
 
 ---
 
-# 16A. A 60-second resumed watch shows more than 60 seconds of raw timestamps
+# 16A. A timed diagnostic watch shows a larger raw-timestamp interval
 
-`--seconds` is a **wall-clock runtime limit for the watch process**, not a source-data time window.
+Normal beginner collection has no timer and runs until Ctrl-C.
+
+The optional `--seconds` argument is an advanced/testing wall-clock runtime
+limit for the watch process, not a source-data time window.
 
 With a persistent state, watch resumes at the saved checkpoint. If raw-log data accumulated while watch was stopped, the next run processes that backlog before or while following the live end.
 
-For example, a 60-second run can legitimately process 10 or 20 minutes of raw-log timestamps if that amount of history accumulated since the previous checkpoint.
+For example, a short timed diagnostic run can legitimately process a much
+larger raw-log timestamp interval if that amount of history accumulated since
+the previous checkpoint.
 
 This is intentional. It preserves observation continuity instead of silently jumping to the current end and losing the paused interval.
 
