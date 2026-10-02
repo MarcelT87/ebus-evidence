@@ -183,6 +183,7 @@ def test_bundle_is_deterministic_and_checksums_verify(tmp_path):
         assert manifest["privacy"]["absolute_paths_included"] is False
         assert manifest["privacy"]["resume_checkpoint_included"] is False
         assert manifest["privacy"]["full_raw_log_included"] is False
+        assert manifest["privacy"]["absolute_timestamps_included"] is True
         assert (
             manifest["privacy"]["context_raw_may_contain_device_specific_bus_data"]
             is True
@@ -404,6 +405,39 @@ def test_bundle_rejects_system_identity_with_unapproved_device_field(tmp_path):
             state_path=state_path,
             system_path=system_path,
         )
+
+
+def test_verify_accepts_legacy_manifest_without_timestamp_privacy_flag(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "current.zip"
+    legacy = tmp_path / "legacy.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src:
+        members = {name: src.read(name) for name in src.namelist()}
+
+    manifest = json.loads(members["manifest.json"])
+    manifest["privacy"].pop("absolute_timestamps_included")
+    members["manifest.json"] = (
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"]["manifest.json"] = hashlib.sha256(
+        members["manifest.json"]
+    ).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    with zipfile.ZipFile(legacy, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name in sorted(members):
+            dst.writestr(name, members[name])
+
+    verified = verify_bundle(legacy)
+    assert verified["valid"] is True
+    assert verified["absolute_timestamps_included"] is None
 
 
 def test_verify_rejects_invalid_observation_counts(tmp_path):
