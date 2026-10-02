@@ -502,6 +502,17 @@ def _bundle(args: argparse.Namespace) -> int:
             "Topology SHA256: "
             f"{result['system_identity']['topology_signature_sha256']}"
         )
+    provenance = result["manifest"].get("provenance")
+    if isinstance(provenance, dict):
+        runtime = provenance["tool_runtime"]
+        print(f"Tool runtime SHA256: {runtime['sha256']}")
+        print(f"Profile SHA256: {provenance['profile_sha256']}")
+        git = provenance.get("git")
+        if isinstance(git, dict):
+            status = "dirty" if git["dirty"] else "clean"
+            print(f"Source commit: {git['commit']} ({status})")
+        else:
+            print("Source commit: unavailable")
     print(f"SHA256: {result['sha256']}")
     print("Absolute timestamps: yes (observation/evidence time windows are exported)")
     print("No absolute paths, resume checkpoint, host metadata or credentials are exported.")
@@ -521,6 +532,19 @@ def _verify(args: argparse.Namespace) -> int:
     print(f"SHA256: {result['sha256']}")
     print(f"Profile: {result['profile']} (v{result['profile_version']})")
     print(f"Created by tool version: {result['tool_version']}")
+    provenance = result.get("provenance")
+    if isinstance(provenance, dict):
+        runtime = provenance["tool_runtime"]
+        print(f"Tool runtime SHA256: {runtime['sha256']}")
+        print(f"Profile SHA256: {provenance['profile_sha256']}")
+        git = provenance.get("git")
+        if isinstance(git, dict):
+            status = "dirty" if git["dirty"] else "clean"
+            print(f"Source commit: {git['commit']} ({status})")
+        else:
+            print("Source commit: unavailable")
+    else:
+        print("Provenance: legacy bundle (not recorded)")
     print(f"Members: {result['member_count']}")
     print(f"State included: {'yes' if result['state_included'] else 'no'}")
     observation = result.get("observation")
