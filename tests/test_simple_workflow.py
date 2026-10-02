@@ -238,9 +238,9 @@ def test_static_import_rolls_back_published_contexts_if_state_commit_fails(
     def fail_final_state_publish(self, target):
         nonlocal context_published
         target_path = Path(target)
-        if target_path == context_dir:
+        if target_path.resolve() == context_dir.resolve():
             context_published = True
-        if self.name == "state.json" and target_path == state_path:
+        if self.name == "state.json" and target_path.resolve() == state_path.resolve():
             raise OSError("simulated final state publish failure")
         return original_replace(self, target)
 
@@ -270,9 +270,9 @@ def test_static_import_restores_preexisting_empty_context_dir_on_state_commit_fa
     def fail_final_state_publish(self, target):
         nonlocal context_published
         target_path = Path(target)
-        if target_path == context_dir:
+        if target_path.resolve() == context_dir.resolve():
             context_published = True
-        if self.name == "state.json" and target_path == state_path:
+        if self.name == "state.json" and target_path.resolve() == state_path.resolve():
             raise OSError("simulated final state publish failure")
         return original_replace(self, target)
 
@@ -318,7 +318,7 @@ def test_static_import_restores_empty_context_dir_if_context_publish_fails(
     original_replace = Path.replace
 
     def fail_context_publish(self, target):
-        if Path(target) == context_dir:
+        if Path(target).resolve() == context_dir.resolve():
             raise OSError("simulated context publish failure")
         return original_replace(self, target)
 
