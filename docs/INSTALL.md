@@ -388,11 +388,13 @@ Watch reads the raw-log file only. It does not generate bus traffic.
 
 ## 11. Recommended: persistent evidence state
 
-For longer observation, create a local data directory:
+For longer observation, create a local data directory inside the checkout:
 
 ```bash
 mkdir -p data/contexts
 ```
+
+The repository's `.gitignore` excludes `data/`. This is the preferred place for local files such as evidence state, system identity and copied scan-result input.
 
 Then run:
 
@@ -461,19 +463,42 @@ Raw context files are excluded by default. If you explicitly include them, they 
 
 ## 13. Update ebus-evidence later
 
-From the repository directory:
+Return to the repository directory first.
+
+Pull the current code **before** assuming that the virtual environment already exists:
+
+```bash
+git pull --ff-only
+```
+
+Check the Python version:
+
+```bash
+python3 --version
+```
+
+If `.venv` is missing, create it:
+
+```bash
+python3 -m venv .venv
+```
+
+Then activate the environment and reinstall the current checkout:
 
 ```bash
 source .venv/bin/activate
-git pull --ff-only
 python -m pip install -e .
 ```
 
-Then run:
+Finally:
 
 ```bash
 ebus-evidence --version
 ```
+
+This update path is intentionally recovery-friendly: an older checkout may not have a `.venv` yet, or the virtual environment may have been removed while the Git checkout was kept.
+
+Do not use `git add` for generated evidence data. The repository ignores `data/`, raw logs, JSON runtime files and ZIP bundles so local evidence is less likely to be committed accidentally.
 
 ---
 
