@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import pytest
 
 from ebus_evidence.cli import main
@@ -51,6 +54,44 @@ def test_different_state_paths_do_not_conflict(tmp_path):
         with StateWriterLock(second_state):
             assert state_writer_lock_path(first_state).is_file()
             assert state_writer_lock_path(second_state).is_file()
+
+
+def test_process_lock_is_released_after_hard_process_exit(tmp_path):
+    state = tmp_path / "state.json"
+    script = """
+import sys
+import time
+
+from ebus_evidence.locking import StateWriterLock
+
+lock = StateWriterLock(sys.argv[1])
+lock.acquire()
+print("LOCKED", flush=True)
+time.sleep(30)
+"""
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(state)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert process.stdout is not None
+        assert process.stdout.readline().strip() == "LOCKED"
+
+        with pytest.raises(StateWriterLockError, match="already in use"):
+            StateWriterLock(state).acquire()
+
+        process.kill()
+        process.wait(timeout=5)
+
+        with StateWriterLock(state):
+            assert state_writer_lock_path(state).is_file()
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
 
 
 def test_collect_refuses_locked_state_before_writing(tmp_path, monkeypatch, capsys):
