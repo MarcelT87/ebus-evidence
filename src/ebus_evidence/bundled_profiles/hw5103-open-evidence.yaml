@@ -1,6 +1,6 @@
 name: hw5103-open-evidence
 version: 2
-description: Small passive discriminator set for currently parked HW5103/VWZIO research paths.
+description: Vaillant-family passive discriminator set for current HW5103/HMU/VWZIO research paths.
 
 checks:
   - id: hmu_a80e_nonzero
