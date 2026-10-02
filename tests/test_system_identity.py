@@ -7,6 +7,7 @@ from ebus_evidence.system_identity import (
     build_system_document,
     parse_scan_result,
     topology_signature,
+    validate_system_document,
 )
 
 
@@ -90,3 +91,34 @@ def test_declared_product_does_not_change_topology_signature():
     assert a["topology_signature_sha256"] == b["topology_signature_sha256"]
     assert a["declared_product"]["model"] == "105/6 A"
     assert a["source"]["extra_scan_columns_retained"] is False
+
+
+def test_system_document_rejects_extra_top_level_fields():
+    devices = parse_scan_result("08;Vaillant;HMU00;0902;5103\n")
+    document = build_system_document(devices)
+    document["hostname"] = "must-not-be-shared"
+
+    with pytest.raises(SystemIdentityError, match="unsupported top-level fields"):
+        validate_system_document(document)
+
+
+def test_system_document_rejects_tampered_signature():
+    devices = parse_scan_result("08;Vaillant;HMU00;0902;5103\n")
+    document = build_system_document(devices)
+    document["topology_signature_sha256"] = "0" * 64
+
+    with pytest.raises(SystemIdentityError, match="does not match devices"):
+        validate_system_document(document)
+
+
+def test_system_document_rejects_extra_declared_product_fields():
+    devices = parse_scan_result("08;Vaillant;HMU00;0902;5103\n")
+    document = build_system_document(
+        devices,
+        declared_manufacturer="Vaillant",
+        declared_model="105/6 A",
+    )
+    document["declared_product"]["serial"] = "private"
+
+    with pytest.raises(SystemIdentityError, match="unsupported fields"):
+        validate_system_document(document)
