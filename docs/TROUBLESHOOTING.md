@@ -535,24 +535,34 @@ Typical status after updating:
 
 ```text
 Evidence state ...... profile rollover pending (v2 -> v3)
-Ready to export ..... NO
+Rollover preview .... read-only; collect/watch persists it
 ```
 
-Run the normal writer command once:
+If the old state already contains evidence, `status` can still report
+`Ready to export YES`. A normal:
+
+```bash
+./evidence export
+```
+
+creates the new-profile bundle from an in-memory rollover preview and does not
+modify the local state. This keeps static-import-only installations usable.
+
+The next normal writer command:
 
 ```bash
 ./evidence collect
 ```
 
-The tool then:
+persists the same rollover under the state-writer lock. The tool then:
 
 - archives the old profile/version observation as a historical epoch;
 - keeps the existing raw-log checkpoint;
 - starts the new profile version with 0 active-epoch frames;
 - does not replay old traffic into new checks.
 
-After that, `status` and `export` use the new active profile while the bundle
-retains the historical epoch.
+Before or after persistence, the bundle retains the historical epoch and the
+new active profile starts with zero inherited coverage.
 
 Old context metadata stays on disk but is excluded from current-profile export
 unless it belongs to the active profile version.
