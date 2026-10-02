@@ -127,6 +127,22 @@ Deterministic ....... yes
 Ready to share.
 ```
 
+### 5. Submit the evidence
+
+For community review, submit the generated:
+
+```text
+data/evidence.zip
+```
+
+through the repository's **Evidence submission** issue template.
+
+Do not attach the complete `ebusd.raw` file. The normal ZIP intentionally keeps
+the contribution small and excludes raw context by default.
+
+See **[Submit evidence](docs/SUBMIT_EVIDENCE.md)** for the exact sharing and
+privacy workflow.
+
 ## Optional system identity
 
 For cross-installation hardware/firmware comparison, an existing
@@ -204,6 +220,7 @@ The adapter transport used by ebusd is outside the evidence boundary.
 - **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** — Docker/native/remote layouts
 - **[System identity](docs/SYSTEM_IDENTITY.md)** — privacy-minimized hardware/firmware identity
 - **[Community test](docs/COMMUNITY_TEST.md)** — cross-installation contribution workflow
+- **[Submit evidence](docs/SUBMIT_EVIDENCE.md)** — attach a verified evidence ZIP for review
 - **[Home Assistant](docs/HOME_ASSISTANT.md)** — special file-based route for Home Assistant users
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** — symptom-based help
 - **[Project boundaries](docs/PROJECT_BOUNDARIES.md)** — what this repository owns and what stays outside it
