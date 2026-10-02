@@ -74,3 +74,12 @@ def test_short_message_mode_record_is_non_frame():
     with pytest.raises(RawNonFrame) as excinfo:
         parse_record(b"2026-10-01 21:09:20.589 <01")
     assert excinfo.value.kind == "short_fragment"
+
+
+def test_truncated_declared_request_is_non_frame():
+    import pytest
+
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(b"2026-09-25 13:15:04.714 >3115b55503a400")
+    assert excinfo.value.kind == "truncated_request"
+    assert "declared request length" in str(excinfo.value)
