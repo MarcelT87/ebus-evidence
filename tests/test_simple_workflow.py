@@ -220,3 +220,30 @@ def test_static_import_aborts_if_source_changes_without_publishing_state(
     assert "raw source changed during import" in out
     assert not (tmp_path / "data" / "evidence-state.json").exists()
     assert not (tmp_path / "data" / "contexts").exists()
+
+
+def test_static_import_reports_truncated_requests_as_non_frames(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied-ebusd.raw"
+    raw.write_bytes(
+        _record("2026-10-01 10:00:00.000")
+        + b"2026-10-01 10:00:01.000 >3115b55503a400\n"
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    out = capsys.readouterr().out
+
+    assert "Non-frames ............ 1" in out
+    assert "Skipped ............... 0" in out
+    assert "truncated_request" in out
+
+    profile = load_profile("hw5103-open-evidence")
+    state = EvidenceStateStore.open(
+        tmp_path / "data" / "evidence-state.json",
+        profile,
+    )
+    assert state.state["observation"]["frames_seen"] == 1
+    assert state.state["observation"]["non_frames"] == 1
+    assert state.state["observation"]["skipped"] == 0
