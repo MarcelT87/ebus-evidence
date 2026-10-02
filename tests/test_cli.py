@@ -175,12 +175,12 @@ def test_system_accepts_existing_scan_result_and_declared_product():
             "--manufacturer",
             "Vaillant",
             "--model",
-            "105/6 A",
+            "TEST-MODEL",
             "--output",
             "/tmp/system.json",
         ]
     )
     assert args.scan_result == "/tmp/scan-result.txt"
     assert args.manufacturer == "Vaillant"
-    assert args.model == "105/6 A"
+    assert args.model == "TEST-MODEL"
     assert args.output == "/tmp/system.json"
