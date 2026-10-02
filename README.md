@@ -134,6 +134,8 @@ Stop with `Ctrl-C`.
 
 This follows the already existing raw log only. It does not generate eBUS traffic.
 
+When a persistent state file is used, the shared evidence also records the observation scope: complete frames, passive vs. ebusd-initiated frames, non-frame/skipped counts and first/last observed frame timestamp.
+
 ## Share evidence
 
 Create a deterministic state/context bundle:
