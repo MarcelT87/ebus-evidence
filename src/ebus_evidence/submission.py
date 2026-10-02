@@ -15,6 +15,8 @@ MAX_SUBMISSION_ARCHIVE_BYTES = 25 * 1024 * 1024
 MAX_SUBMISSION_UNCOMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_SUBMISSION_MEMBERS = 1000
 
+_TRUSTED_SUBMISSION_PROFILES = ("hw5103-open-evidence",)
+_MAX_PROFILE_MEMBER_BYTES = 256 * 1024
 _MAX_SMALL_MEMBER_BYTES = 1024 * 1024
 _MAX_STATE_MEMBER_BYTES = 32 * 1024 * 1024
 
@@ -32,7 +34,21 @@ def _canonical_profile_bytes(profile: dict[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
-def _preflight_submission_zip(path: Path) -> None:
+def _trusted_profiles() -> dict[str, tuple[str, int]]:
+    trusted: dict[str, tuple[str, int]] = {}
+    for name in _TRUSTED_SUBMISSION_PROFILES:
+        try:
+            profile = load_profile(name)
+        except ProfileError as exc:
+            raise SubmissionError(
+                f"cannot load trusted bundled submission profile {name!r}: {exc}"
+            ) from exc
+        digest = hashlib.sha256(_canonical_profile_bytes(profile)).hexdigest()
+        trusted[digest] = (profile["name"], profile.get("version", 1))
+    return trusted
+
+
+def _preflight_submission_zip(path: Path) -> tuple[str, int, str]:
     try:
         archive_size = path.stat().st_size
     except OSError as exc:
@@ -61,6 +77,13 @@ def _preflight_submission_zip(path: Path) -> None:
                 "submission uncompressed size exceeds 64 MiB policy"
             )
 
+        info_by_name = {info.filename: info for info in infos}
+        profile_info = info_by_name.get("profile.yaml")
+        if profile_info is not None and profile_info.file_size > _MAX_PROFILE_MEMBER_BYTES:
+            raise SubmissionError(
+                "profile.yaml exceeds the public submission limit"
+            )
+
         for info in infos:
             if info.flag_bits & 0x1:
                 raise SubmissionError(
@@ -80,7 +103,6 @@ def _preflight_submission_zip(path: Path) -> None:
             elif (
                 info.filename in {
                     "manifest.json",
-                    "profile.yaml",
                     "checksums.json",
                     "system.json",
                 }
@@ -94,6 +116,25 @@ def _preflight_submission_zip(path: Path) -> None:
                         f"submission metadata member is unexpectedly large: "
                         f"{info.filename}"
                     )
+
+        if profile_info is None:
+            # Let the structural verifier report the normal missing-member error.
+            return "", 0, ""
+
+        try:
+            embedded_profile = archive.read("profile.yaml")
+        except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+            raise BundleError(f"cannot read bundle member profile.yaml: {exc}") from exc
+
+        embedded_sha256 = hashlib.sha256(embedded_profile).hexdigest()
+        trusted = _trusted_profiles()
+        matched = trusted.get(embedded_sha256)
+        if matched is None:
+            raise SubmissionError(
+                "embedded profile does not match a trusted bundled submission profile"
+            )
+
+        return matched[0], matched[1], embedded_sha256
 
 
 def _trusted_profile_sha256(profile_name: str, profile_version: int) -> str:
@@ -120,7 +161,9 @@ def verify_submission_bundle(path: str | Path) -> dict[str, Any]:
     if not bundle_path.is_file():
         raise BundleError(f"bundle not found: {bundle_path}")
 
-    _preflight_submission_zip(bundle_path)
+    trusted_name, trusted_version, trusted_profile_sha256 = (
+        _preflight_submission_zip(bundle_path)
+    )
     result = verify_bundle(bundle_path)
 
     if not result["state_included"]:
@@ -163,13 +206,21 @@ def verify_submission_bundle(path: str | Path) -> dict[str, Any]:
         )
 
     provenance = result["provenance"]
-    trusted_profile_sha256 = _trusted_profile_sha256(
-        result["profile"],
-        result["profile_version"],
-    )
-    if provenance["profile_sha256"] != trusted_profile_sha256:
-        raise SubmissionError(
-            "embedded profile does not match the trusted bundled profile"
+    if trusted_profile_sha256:
+        if result["profile"] != trusted_name or result["profile_version"] != trusted_version:
+            raise SubmissionError(
+                "verified profile identity does not match the trusted preflight profile"
+            )
+        if provenance["profile_sha256"] != trusted_profile_sha256:
+            raise SubmissionError(
+                "embedded profile hash changed between preflight and verification"
+            )
+    else:
+        # A missing profile.yaml is normally reported by verify_bundle before
+        # reaching this branch.
+        trusted_profile_sha256 = _trusted_profile_sha256(
+            result["profile"],
+            result["profile_version"],
         )
 
     return {
