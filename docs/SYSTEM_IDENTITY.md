@@ -1,0 +1,145 @@
+# System identity
+
+Evidence is most useful when it can be tied to a clearly described hardware and firmware combination.
+
+`ebus-evidence` therefore keeps two kinds of information separate:
+
+1. the **declared product name** supplied by the user, for example `Vaillant 105/6 A`;
+2. the **observed eBUS device identities** reported by an existing ebusd scan result.
+
+The product name is not used to guess the bus hardware.
+
+---
+
+## Safety boundary
+
+This workflow does **not** start an eBUS scan.
+
+It consumes output that already exists from:
+
+```text
+ebusctl scan result
+```
+
+Do not run `ebusctl scan` or `ebusctl scan full` merely to create evidence for this project.
+
+If your ebusd installation has no existing scan result, skip system identity for now.
+
+---
+
+## 1. Save the existing scan result
+
+On a system where `ebusctl` is already configured to talk to your normal ebusd instance:
+
+```bash
+ebusctl scan result > scan-result.txt
+```
+
+Review the file before continuing:
+
+```bash
+cat scan-result.txt
+```
+
+A normal line starts with fields such as:
+
+```text
+08;Vaillant;HMU00;0902;5103;...
+```
+
+The first five columns are:
+
+```text
+address ; manufacturer ; device id ; software version ; hardware version
+```
+
+Additional scan columns are deliberately ignored by `ebus-evidence`.
+
+---
+
+## 2. Create system.json
+
+Example for a user-declared Vaillant 105/6 A:
+
+```bash
+ebus-evidence system \
+  --scan-result scan-result.txt \
+  --manufacturer Vaillant \
+  --model "105/6 A" \
+  --output system.json
+```
+
+This writes a privacy-minimized document containing only:
+
+- bus address;
+- manufacturer;
+- device ID;
+- software version;
+- hardware version;
+- optional user-declared product manufacturer/model;
+- a deterministic topology SHA-256.
+
+It does not retain the additional scan-result columns.
+
+---
+
+## 3. What the topology signature means
+
+The topology signature is calculated only from the observed device list:
+
+```text
+address + manufacturer + device id + SW + HW
+```
+
+The user-declared marketing/product name is deliberately **not** part of the signature.
+
+Therefore:
+
+- two technically identical device topologies produce the same signature;
+- changing `105/6 A` to another human label does not change the signature;
+- firmware or hardware differences do change the signature.
+
+The signature is intended for grouping comparable systems. It is not a personal installation identifier.
+
+---
+
+## 4. Include it in an evidence bundle
+
+Once you also have evidence state/context:
+
+```bash
+ebus-evidence bundle \
+  --profile hw5103-open-evidence \
+  --state data/evidence-state.json \
+  --system system.json \
+  --output evidence.zip
+```
+
+Verify:
+
+```bash
+ebus-evidence verify evidence.zip
+```
+
+The verifier checks that:
+
+- `system.json` follows the allowed schema;
+- no extra device fields such as serial numbers were added;
+- the topology signature matches the contained devices;
+- the system document is protected by the bundle checksums.
+
+---
+
+## 5. Current Vaillant research scope
+
+The current bundled evidence profile is focused on Vaillant-family HW5103 research.
+
+System identity is intentionally separate from that profile. This lets future profiles target other Vaillant hardware/firmware combinations without changing the raw-log parser.
+
+---
+
+## Related documentation
+
+- [Installation and first run](INSTALL.md)
+- [Community cross-installation test](COMMUNITY_TEST.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
