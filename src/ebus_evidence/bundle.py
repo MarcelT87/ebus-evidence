@@ -41,6 +41,75 @@ def _canonical_yaml(data: Any) -> bytes:
     ).encode("utf-8")
 
 
+def _validate_shared_observation(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise BundleError("shared state observation must be a mapping")
+
+    expected_keys = {
+        "frames_seen",
+        "passive_frames",
+        "ebusd_initiated_frames",
+        "non_frames",
+        "skipped",
+        "first_frame_timestamp",
+        "last_frame_timestamp",
+    }
+    if set(value) != expected_keys:
+        raise BundleError("shared state observation has unexpected fields")
+
+    for key in (
+        "frames_seen",
+        "passive_frames",
+        "ebusd_initiated_frames",
+        "non_frames",
+        "skipped",
+    ):
+        count = value.get(key)
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise BundleError(
+                f"shared state observation {key} must be a non-negative integer"
+            )
+
+    if value["passive_frames"] + value["ebusd_initiated_frames"] != value["frames_seen"]:
+        raise BundleError(
+            "shared state observation passive/initiated frame counts must sum to frames_seen"
+        )
+
+    normalized = deepcopy(value)
+    for key in ("first_frame_timestamp", "last_frame_timestamp"):
+        timestamp = value.get(key)
+        if timestamp is None:
+            continue
+        if not isinstance(timestamp, dict) or set(timestamp) != {"raw", "utc", "display"}:
+            raise BundleError(
+                f"shared state observation {key} must contain raw/utc/display"
+            )
+        if not isinstance(timestamp.get("raw"), str) or not timestamp["raw"]:
+            raise BundleError(
+                f"shared state observation {key} requires a non-empty raw timestamp"
+            )
+        for optional in ("utc", "display"):
+            if timestamp.get(optional) is not None and not isinstance(
+                timestamp.get(optional), str
+            ):
+                raise BundleError(
+                    f"shared state observation {key} {optional} must be a string or null"
+                )
+
+    if value["frames_seen"] == 0:
+        if value["first_frame_timestamp"] is not None or value["last_frame_timestamp"] is not None:
+            raise BundleError(
+                "shared state observation timestamps must be null when frames_seen is zero"
+            )
+    else:
+        if value["first_frame_timestamp"] is None or value["last_frame_timestamp"] is None:
+            raise BundleError(
+                "shared state observation timestamps are required when frames were seen"
+            )
+
+    return normalized
+
+
 def _safe_context_raw_name(value: Any) -> str:
     if not isinstance(value, str) or not value:
         raise BundleError("context raw_file must be a non-empty filename")
@@ -72,6 +141,7 @@ def shared_state(state: dict[str, Any]) -> dict[str, Any]:
         "created_at": state.get("created_at"),
         "updated_at": state.get("updated_at"),
         "total_events": int(state.get("total_events", 0)),
+        "observation": deepcopy(state.get("observation")),
         "continuity_reset_count": len(
             state.get("continuity", {}).get("resets", [])
             if isinstance(state.get("continuity"), dict)
@@ -431,6 +501,10 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
                 )
             if not isinstance(state.get("checks"), dict):
                 raise BundleError("shared state checks must be a mapping")
+
+            observation = state.get("observation")
+            if observation is not None:
+                _validate_shared_observation(observation)
 
             expected_checks = {check["id"] for check in profile["checks"]}
             if set(state["checks"]) != expected_checks:
