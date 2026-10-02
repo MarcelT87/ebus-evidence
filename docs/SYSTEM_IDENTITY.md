@@ -120,13 +120,13 @@ ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --system data/system.json \
-  --output evidence.zip
+  --output data/evidence.zip
 ```
 
 Verify:
 
 ```bash
-ebus-evidence verify evidence.zip
+ebus-evidence verify data/evidence.zip
 ```
 
 The verifier checks that:
