@@ -287,10 +287,39 @@ reuses the saved checkpoint and resumes when continuity can be proven.
 The optional `--seconds` argument is reserved for controlled diagnostics and
 automated tests. Beginners do not need it for normal collection.
 
-With a manual raw-log path:
+With a manual **growing/live** raw-log path:
 
 ```bash
 ./evidence collect --raw /path/to/ebusd.raw
+```
+
+### Import an existing static raw-log file
+
+If the file is a completed/copy of existing history rather than a live growing
+log, use:
+
+```bash
+./evidence import --raw /path/to/ebusd.raw
+```
+
+The import:
+
+- reads the source from beginning to end without modifying it;
+- uses the same evidence profile and parser as live collection;
+- creates the normal `data/evidence-state.json` used by export;
+- refuses to mix with an existing evidence state;
+- aborts if the source file changes while it is being imported.
+
+If a sibling `FILE.old` belongs to the same copied history:
+
+```bash
+./evidence import --raw /path/to/ebusd.raw --include-rotated
+```
+
+Then export normally:
+
+```bash
+./evidence export
 ```
 
 ---
@@ -420,6 +449,7 @@ Experienced users can continue to use the full interface:
 
 ```text
 ebus-evidence doctor
+ebus-evidence import
 ebus-evidence analyze
 ebus-evidence watch
 ebus-evidence system
@@ -499,7 +529,8 @@ Validated/supported input:
 
 - normal ebusd message-mode raw log;
 - Docker/native local file;
-- copied/read-only mounted file;
+- copied/static message-mode raw-log file through `import`;
+- read-only mounted growing raw-log file through `collect`;
 - Home Assistant OS through a file-based workflow.
 
 Not currently supported as the primary evidence input:
