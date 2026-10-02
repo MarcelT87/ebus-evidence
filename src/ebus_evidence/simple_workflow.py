@@ -22,6 +22,67 @@ DEFAULT_SYSTEM = "data/system.json"
 DEFAULT_EXPORT = "data/evidence.zip"
 
 
+def _restore_empty_context_destination(
+    contexts: Path,
+    *,
+    existed_before: bool,
+) -> None:
+    if contexts.exists():
+        if contexts.is_dir():
+            shutil.rmtree(contexts)
+        else:
+            contexts.unlink()
+    if existed_before:
+        contexts.mkdir(parents=True, exist_ok=False)
+
+
+def _publish_static_import_outputs(
+    *,
+    temp_state: Path,
+    temp_contexts: Path,
+    state_file: Path,
+    contexts: Path,
+    contexts_existed_before: bool,
+) -> None:
+    """Publish a completed static import with failure rollback.
+
+    Contexts are published first and the state file last. The state therefore
+    remains the commit marker for a completed import. If publishing the state
+    fails after contexts were moved into place, the context destination is
+    rolled back to the exact pre-import empty/absent condition.
+    """
+
+    contexts_touched = False
+    try:
+        if contexts.exists():
+            contexts.rmdir()
+
+        if temp_contexts.exists():
+            temp_contexts.replace(contexts)
+        else:
+            contexts.mkdir(parents=True, exist_ok=False)
+        contexts_touched = True
+
+        temp_state.replace(state_file)
+    except OSError as publish_error:
+        rollback_error: OSError | None = None
+        if contexts_touched or not contexts.exists():
+            try:
+                _restore_empty_context_destination(
+                    contexts,
+                    existed_before=contexts_existed_before,
+                )
+            except OSError as exc:
+                rollback_error = exc
+
+        if rollback_error is not None:
+            raise OSError(
+                "static import publish failed and context rollback also failed: "
+                f"publish={publish_error}; rollback={rollback_error}"
+            ) from publish_error
+        raise
+
+
 def _validate_timezones(source_timezone: str | None, display_timezone: str | None) -> None:
     get_timezone(source_timezone)
     get_timezone(display_timezone)
@@ -198,7 +259,8 @@ def import_raw(
         )
         return 2
 
-    if contexts.exists():
+    contexts_existed_before = contexts.exists()
+    if contexts_existed_before:
         if not contexts.is_dir():
             print(f"error: context path is not a directory: {contexts}")
             return 2
@@ -256,14 +318,13 @@ def import_raw(
 
         store.save()
 
-        if contexts.exists():
-            contexts.rmdir()
-        if temp_contexts.exists():
-            temp_contexts.replace(contexts)
-        else:
-            contexts.mkdir(parents=True, exist_ok=True)
-
-        temp_state.replace(state_file)
+        _publish_static_import_outputs(
+            temp_state=temp_state,
+            temp_contexts=temp_contexts,
+            state_file=state_file,
+            contexts=contexts,
+            contexts_existed_before=contexts_existed_before,
+        )
     except (OSError, StateError, StaticImportError) as exc:
         print(f"error: static import failed: {exc}")
         return 2
