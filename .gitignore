@@ -14,6 +14,9 @@ internal/
 notes/
 local/
 
+# Generated local launcher
+/evidence
+
 # Runtime and evidence data
 data/
 contexts/

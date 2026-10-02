@@ -84,13 +84,13 @@ head -n 5 /srv/ebusd/rawlog/ebusd.raw
 Then try automatic discovery:
 
 ```bash
-ebus-evidence doctor
+./evidence doctor
 ```
 
 If automatic discovery does not fit the installation, use the host path directly:
 
 ```bash
-ebus-evidence doctor \
+./evidence doctor \
   --raw /srv/ebusd/rawlog/ebusd.raw \
   --profile hw5103-open-evidence
 ```
@@ -131,13 +131,13 @@ head -n 5 /var/log/ebusd.raw
 Then:
 
 ```bash
-ebus-evidence doctor
+./evidence doctor
 ```
 
 or explicitly:
 
 ```bash
-ebus-evidence doctor \
+./evidence doctor \
   --raw /var/log/ebusd.raw \
   --profile hw5103-open-evidence
 ```
@@ -156,7 +156,7 @@ The current simple approaches are:
 Then use the file explicitly:
 
 ```bash
-ebus-evidence analyze \
+./evidence analyze \
   --raw /path/to/ebusd.raw \
   --profile hw5103-open-evidence
 ```
@@ -221,7 +221,7 @@ working ebusd
      ↓
 enable or locate message-mode raw log
      ↓
-ebus-evidence doctor
+./evidence doctor
      ↓
 ebus-evidence analyze
 ```

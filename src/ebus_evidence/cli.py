@@ -19,6 +19,16 @@ from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.report import analyze_frames, format_text, shareable_report
 from ebus_evidence.timeutil import TimezoneError, get_timezone
 from ebus_evidence.state import EvidenceStateStore, StateError
+from ebus_evidence.simple_workflow import (
+    DEFAULT_CONTEXT_DIR,
+    DEFAULT_EXPORT,
+    DEFAULT_PROFILE,
+    DEFAULT_STATE,
+    DEFAULT_SYSTEM,
+    collect as simple_collect,
+    export as simple_export,
+    status as simple_status,
+)
 from ebus_evidence.system_identity import SystemIdentityError, create_system_document
 from ebus_evidence.watch import ResumeError, run_watch
 
@@ -515,6 +525,41 @@ def _verify(args: argparse.Namespace) -> int:
     )
     return 0
 
+def _collect(args: argparse.Namespace) -> int:
+    return simple_collect(
+        raw_path=args.raw,
+        profile_name=args.profile,
+        state_path=args.state,
+        context_dir=args.context_dir,
+        seconds=args.seconds,
+        reset_checkpoint=args.reset_checkpoint,
+        state_flush_interval=args.state_flush_interval,
+        source_timezone=args.source_timezone,
+        display_timezone=args.display_timezone,
+    )
+
+
+def _status(args: argparse.Namespace) -> int:
+    return simple_status(
+        raw_path=args.raw,
+        profile_name=args.profile,
+        state_path=args.state,
+        context_dir=args.context_dir,
+        system_path=args.system,
+    )
+
+
+def _export(args: argparse.Namespace) -> int:
+    return simple_export(
+        profile_name=args.profile,
+        state_path=args.state,
+        context_dir=args.context_dir,
+        system_path=args.system,
+        output_path=args.output,
+        include_context_raw=args.include_context_raw,
+    )
+
+
 def _add_time_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--source-timezone",
@@ -553,6 +598,114 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_time_arguments(doctor)
     doctor.set_defaults(func=_doctor)
+
+    collect = subparsers.add_parser(
+        "collect",
+        help="beginner-friendly persistent passive collection with safe defaults",
+    )
+    collect.add_argument(
+        "--raw",
+        help="manual path to an ebusd message-mode raw log; otherwise ebusd is discovered",
+    )
+    collect.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help=f"profile path or bundled profile name (default: {DEFAULT_PROFILE})",
+    )
+    collect.add_argument(
+        "--state",
+        default=DEFAULT_STATE,
+        help=f"persistent evidence state (default: {DEFAULT_STATE})",
+    )
+    collect.add_argument(
+        "--context-dir",
+        default=DEFAULT_CONTEXT_DIR,
+        help=f"context directory (default: {DEFAULT_CONTEXT_DIR})",
+    )
+    collect.add_argument(
+        "--seconds",
+        type=float,
+        help="optional wall-clock runtime limit; omit to collect until Ctrl-C",
+    )
+    collect.add_argument(
+        "--reset-checkpoint",
+        action="store_true",
+        help="acknowledge a continuity gap and start at the current raw-log end",
+    )
+    collect.add_argument(
+        "--state-flush-interval",
+        type=float,
+        default=5.0,
+        help="seconds between atomic state/checkpoint writes (default: 5)",
+    )
+    _add_time_arguments(collect)
+    collect.set_defaults(func=_collect)
+
+    status = subparsers.add_parser(
+        "status",
+        help="show whether local evidence is ready for export",
+    )
+    status.add_argument(
+        "--raw",
+        help="manual path to an ebusd message-mode raw log; otherwise ebusd is discovered",
+    )
+    status.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help=f"profile path or bundled profile name (default: {DEFAULT_PROFILE})",
+    )
+    status.add_argument(
+        "--state",
+        default=DEFAULT_STATE,
+        help=f"persistent evidence state (default: {DEFAULT_STATE})",
+    )
+    status.add_argument(
+        "--context-dir",
+        default=DEFAULT_CONTEXT_DIR,
+        help=f"context directory (default: {DEFAULT_CONTEXT_DIR})",
+    )
+    status.add_argument(
+        "--system",
+        default=DEFAULT_SYSTEM,
+        help=f"optional system identity (default: {DEFAULT_SYSTEM})",
+    )
+    status.set_defaults(func=_status)
+
+    export = subparsers.add_parser(
+        "export",
+        help="create and immediately verify a shareable ZIP using safe defaults",
+    )
+    export.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE,
+        help=f"profile path or bundled profile name (default: {DEFAULT_PROFILE})",
+    )
+    export.add_argument(
+        "--state",
+        default=DEFAULT_STATE,
+        help=f"evidence state (default: {DEFAULT_STATE})",
+    )
+    export.add_argument(
+        "--context-dir",
+        default=DEFAULT_CONTEXT_DIR,
+        help=f"context directory (default: {DEFAULT_CONTEXT_DIR})",
+    )
+    export.add_argument(
+        "--system",
+        default=DEFAULT_SYSTEM,
+        help=f"optional system identity (default: {DEFAULT_SYSTEM})",
+    )
+    export.add_argument(
+        "--output",
+        default=DEFAULT_EXPORT,
+        help=f"output ZIP path (default: {DEFAULT_EXPORT})",
+    )
+    export.add_argument(
+        "--include-context-raw",
+        action="store_true",
+        help="explicitly include raw context files; review them before public sharing",
+    )
+    export.set_defaults(func=_export)
 
     analyze = subparsers.add_parser(
         "analyze",

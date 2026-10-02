@@ -184,3 +184,30 @@ def test_system_accepts_existing_scan_result_and_declared_product():
     assert args.manufacturer == "Vaillant"
     assert args.model == "TEST-MODEL"
     assert args.output == "/tmp/system.json"
+
+
+def test_collect_uses_beginner_defaults():
+    args = build_parser().parse_args(["collect"])
+    assert args.raw is None
+    assert args.profile == "hw5103-open-evidence"
+    assert args.state == "data/evidence-state.json"
+    assert args.context_dir == "data/contexts"
+    assert args.seconds is None
+
+
+def test_status_uses_beginner_defaults():
+    args = build_parser().parse_args(["status"])
+    assert args.profile == "hw5103-open-evidence"
+    assert args.state == "data/evidence-state.json"
+    assert args.context_dir == "data/contexts"
+    assert args.system == "data/system.json"
+
+
+def test_export_uses_beginner_defaults():
+    args = build_parser().parse_args(["export"])
+    assert args.profile == "hw5103-open-evidence"
+    assert args.state == "data/evidence-state.json"
+    assert args.context_dir == "data/contexts"
+    assert args.system == "data/system.json"
+    assert args.output == "data/evidence.zip"
+    assert args.include_context_raw is False

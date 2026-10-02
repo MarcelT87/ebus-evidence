@@ -1,6 +1,7 @@
 # ebus-evidence
 
-`ebus-evidence` turns existing **ebusd message-mode raw logs** into small, reproducible evidence for cross-installation eBUS research.
+`ebus-evidence` turns existing **ebusd message-mode raw logs** into small,
+reproducible evidence for cross-installation eBUS research.
 
 It is deliberately passive:
 
@@ -17,39 +18,130 @@ The normal data path is:
 eBUS adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
 ```
 
-> **Current research scope:** the parser works on normal ebusd message-mode raw logs. The bundled `hw5103-open-evidence` profile and current real-world validation are focused on **Vaillant-family systems**, especially HW5103/HMU/VWZIO research paths.
+> **Current research scope:** the parser works on normal ebusd message-mode raw
+> logs. The bundled `hw5103-open-evidence` profile and current real-world
+> validation are focused on **Vaillant-family systems**, especially
+> HW5103/HMU/VWZIO research paths.
 
-## Quick start
+## Beginner workflow
 
-Requirements: Linux, Python 3.11+, Git, and a readable normal ebusd message-mode raw log.
+For the normal Linux/Docker or native ebusd path, the intended workflow is:
+
+```text
+install -> doctor -> collect -> export
+```
+
+Requirements: Linux, Python 3.11+, Git, and a readable normal ebusd
+message-mode raw log.
+
+### 1. Install
 
 ```bash
 cd ~
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
+bash install.sh
+```
 
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+The installer creates a local `.venv`, installs the checkout and enables the
+local `./evidence` launcher. It does not configure or access the eBUS adapter.
 
-ebus-evidence doctor
-ebus-evidence analyze --profile hw5103-open-evidence
+### 2. Check
+
+```bash
+./evidence doctor
 ```
 
 If `doctor` cannot auto-discover your setup, use an explicit file:
 
 ```bash
-ebus-evidence doctor \
-  --raw /path/to/ebusd.raw \
-  --profile hw5103-open-evidence
+./evidence doctor --raw /path/to/ebusd.raw --profile hw5103-open-evidence
 ```
 
-Do **not** use ebusd byte-mode logging (`--lograwdata=bytes`). The supported common input is normal message-mode raw logging.
+Do **not** use ebusd byte-mode logging (`--lograwdata=bytes`). The supported
+common input is normal message-mode raw logging.
 
-## Persistent passive collection
+### 3. Collect
 
 ```bash
-mkdir -p data/contexts
+./evidence collect
+```
+
+Collection is passive and read-only. Stop with `Ctrl-C`.
+
+The beginner command automatically uses:
+
+```text
+profile:   hw5103-open-evidence
+state:     data/evidence-state.json
+contexts:  data/contexts
+```
+
+A later `./evidence collect` resumes from the saved checkpoint when continuity
+can be proven. It does not silently discard a gap.
+
+Check progress at any time with:
+
+```bash
+./evidence status
+```
+
+### 4. Export a verified ZIP
+
+```bash
+./evidence export
+```
+
+This creates:
+
+```text
+data/evidence.zip
+```
+
+and immediately verifies the bundle.
+
+If `data/system.json` exists and is valid, it is included automatically.
+Raw context payloads remain **excluded by default**.
+
+The successful result ends with:
+
+```text
+Status .............. VALID
+Deterministic ....... yes
+Ready to share.
+```
+
+## Optional system identity
+
+For cross-installation hardware/firmware comparison, an existing
+`ebusctl scan result` can be converted into a privacy-minimized
+`data/system.json`.
+
+No scan is initiated by `ebus-evidence`.
+
+See **[System identity](docs/SYSTEM_IDENTITY.md)**.
+
+## Advanced / explicit commands
+
+The beginner commands are convenience wrappers around the same implementation.
+The explicit expert interface remains available:
+
+```text
+ebus-evidence doctor
+ebus-evidence analyze
+ebus-evidence watch
+ebus-evidence system
+ebus-evidence bundle
+ebus-evidence verify
+```
+
+Use the explicit commands when you need custom profiles, paths, timezone
+handling, JSON analysis output, checkpoint controls or explicit bundle options.
+
+For example:
+
+```bash
+source .venv/bin/activate
 
 ebus-evidence watch \
   --profile hw5103-open-evidence \
@@ -57,28 +149,23 @@ ebus-evidence watch \
   --context-dir data/contexts
 ```
 
-Stop with `Ctrl-C`. With a saved checkpoint, later runs resume from the previous raw-log position and may replay backlog written while watch was stopped.
+`analyze` inspects existing raw-log history. It does **not** create the
+persistent evidence state used by the normal `collect -> export` workflow.
 
-Local runtime/evidence files belong under `data/`, which is ignored by Git.
+## Privacy
 
-## Create and verify evidence
+The normal export:
 
-If you already have an existing `ebusctl scan result`, you can create a privacy-minimized system identity first. See [System identity](docs/SYSTEM_IDENTITY.md). Do not start a new active scan merely for this project.
+- excludes raw context payloads;
+- excludes absolute host paths;
+- excludes resume checkpoint/device/inode details;
+- excludes host metadata and credentials;
+- retains absolute observation/evidence timestamps because timing is part of
+  reproducible evidence;
+- explicitly discloses timestamp retention in the bundle/verifier output.
 
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --context-dir data/contexts \
-  --system data/system.json \
-  --output data/evidence.zip
-
-ebus-evidence verify data/evidence.zip
-```
-
-If no `data/system.json` exists, omit the `--system` line.
-
-Raw context payloads are **excluded by default**. Shared evidence does retain absolute observation/evidence timestamps because timing is part of reproducible evidence; the bundle and verifier disclose this explicitly.
+Only use `--include-context-raw` when you deliberately want reviewed raw
+context payloads in the ZIP.
 
 ## Supported setups
 
@@ -95,7 +182,7 @@ The adapter transport used by ebusd is outside the evidence boundary.
 
 ## Documentation
 
-- **[Installation and first run](docs/INSTALL.md)** — complete beginner path
+- **[Installation and first run](docs/INSTALL.md)** — beginner and advanced paths
 - **[Home Assistant](docs/HOME_ASSISTANT.md)** — Home Assistant-specific route
 - **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** — Docker/native/remote layouts
 - **[System identity](docs/SYSTEM_IDENTITY.md)** — privacy-minimized hardware/firmware identity
@@ -115,9 +202,11 @@ Tests use synthetic fixtures and do not require a heating system.
 
 ## Relationship to ebusd
 
-[ebusd](https://github.com/john30/ebusd) is a separate project maintained by John30 and contributors.
+[ebusd](https://github.com/john30/ebusd) is a separate project maintained by
+John30 and contributors.
 
-`ebus-evidence` is an independent community project. It is not part of ebusd and does not bundle or redistribute ebusd.
+`ebus-evidence` is an independent community project. It is not part of ebusd
+and does not bundle or redistribute ebusd.
 
 ## License
 

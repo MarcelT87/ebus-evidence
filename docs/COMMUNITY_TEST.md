@@ -1,10 +1,15 @@
 # Community cross-installation test
 
-This is the minimal test flow for another ebusd user who wants to contribute comparable passive evidence.
+This is the normal contribution flow for another ebusd user who wants to
+produce comparable passive evidence.
 
-> **Current target group:** this first community workflow is aimed at **Vaillant-family eBUS installations**. The bundled `hw5103-open-evidence` profile contains Vaillant-specific identities from the current research. Users of other manufacturers are welcome to test basic raw-log compatibility, but should not expect this profile to provide meaningful device coverage yet.
+> **Current target group:** this first community workflow is aimed at
+> **Vaillant-family eBUS installations**. The bundled
+> `hw5103-open-evidence` profile contains Vaillant-specific identities from the
+> current research.
 
-The goal is not to change the heating system or probe unknown registers. The tool consumes an already configured ebusd message-mode raw log.
+The goal is not to change the heating system or probe unknown registers.
+The tool consumes an already configured ebusd message-mode raw log.
 
 ## Safety boundary
 
@@ -24,182 +29,181 @@ The test does not require:
 cd ~
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
-
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+bash install.sh
 ```
 
-## 2. Check ebusd discovery
+After installation use the local launcher:
+
+```bash
+./evidence --version
+```
+
+## 2. Check the ebusd/raw-log setup
 
 If ebusd runs in Docker or as a native systemd service:
 
 ```bash
-ebus-evidence doctor
+./evidence doctor
 ```
 
-Expected outcome is a detected ebusd process plus an existing **message-mode** raw-log path.
+Expected outcome is a detected ebusd process plus an existing
+**message-mode** raw-log path.
 
-If discovery cannot map the installation, use an explicit raw-log path instead. Do not enable byte-mode logging for this tool.
-
-## 3. Run an offline analysis
+If discovery cannot map the installation:
 
 ```bash
-ebus-evidence analyze \
+./evidence doctor \
+  --raw /path/to/ebusd.raw \
   --profile hw5103-open-evidence
 ```
 
-If the ebusd timestamps are known to be UTC, a more useful comparison is:
+Do not enable byte-mode logging for this tool.
+
+## 3. Collect persistent evidence
+
+This step is required for the normal shareable ZIP workflow:
 
 ```bash
-ebus-evidence analyze \
-  --profile hw5103-open-evidence \
-  --source-timezone UTC \
-  --display-timezone Europe/Berlin
+./evidence collect
 ```
 
-For other installations, replace the display timezone as appropriate.
+Stop with `Ctrl-C` after the desired observation period.
 
-## 4. Optional passive watch
+The command automatically keeps:
 
-Create a local data directory:
+```text
+data/evidence-state.json
+data/contexts/
+```
+
+and uses the bundled `hw5103-open-evidence` profile.
+
+A later run of:
 
 ```bash
-mkdir -p data/contexts
+./evidence collect
 ```
 
-Then:
+resumes from the saved checkpoint when continuity can be proven.
+
+For a manual raw-log path:
 
 ```bash
-ebus-evidence watch \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --context-dir data/contexts
+./evidence collect --raw /path/to/ebusd.raw
 ```
 
-Stop with Ctrl-C.
+Check progress:
 
-The bundled HW5103 profile currently captures context only for explicitly configured rare non-zero HMU `/a80e` or `/ba08` observations.
+```bash
+./evidence status
+```
 
-## 5. Identify the system
+Important:
 
-For hardware/firmware comparison, prefer the structured [System identity](SYSTEM_IDENTITY.md) workflow when an existing `ebusctl scan result` is available.
+> `analyze` is optional historical inspection. It does not create the
+> persistent evidence state used by the normal ZIP workflow.
 
-Keep the input and generated identity under the ignored local `data/` directory:
+## 4. Optional: identify the system
+
+For hardware/firmware comparison, prefer the structured
+[System identity](SYSTEM_IDENTITY.md) workflow when an existing
+`ebusctl scan result` is already available.
+
+Keep local input/output under ignored `data/`:
 
 ```bash
 mkdir -p data
 
-ebus-evidence system \
+./evidence system \
   --scan-result data/scan-result.txt \
   --manufacturer Vaillant \
   --model "YOUR-MODEL" \
   --output data/system.json
 ```
 
-Replace the example manufacturer/model with the product information that is actually known for the installation.
+This command does not start a scan. It keeps only
+address/manufacturer/device ID/SW/HW from each scan line.
 
-This command does not start a scan. It reads the supplied file and keeps only address/manufacturer/device ID/SW/HW from each scan line.
+If no existing scan result is available, do **not** trigger a new scan merely
+for this project. Skip system identity; export still works.
 
-If no existing scan result is available, do **not** trigger a new scan merely for this project. Skip `--system` in the bundle step.
+## 5. Export the ZIP
 
-Useful additional human-supplied context can still include:
+Run:
+
+```bash
+./evidence export
+```
+
+The command automatically uses the collected state and context metadata,
+includes `data/system.json` when it exists and is valid, writes:
 
 ```text
-heat-pump / boiler family:
-controller:
-ebusd version:
-configuration source/version:
-whether raw timestamps are UTC or local time:
-rough observation duration:
+data/evidence.zip
 ```
 
-Do not include passwords, access tokens, network addresses or unrelated Home Assistant configuration.
+and immediately verifies it.
 
-## 6. Create a shareable bundle
-
-Normal complete bundle when `data/system.json` exists:
-
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --context-dir data/contexts \
-  --system data/system.json \
-  --output data/evidence.zip
-```
-
-If no system identity is available, omit the `--system data/system.json` line.
-
-Raw context payloads are excluded by default. Context metadata can still be included.
-
-A state-only bundle is valid when no context directory is being used:
-
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --output data/evidence.zip
-```
-
-Only if you intentionally want to include reviewed raw context payloads:
-
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --context-dir data/contexts \
-  --system data/system.json \
-  --include-context-raw \
-  --output data/evidence-with-context-raw.zip
-```
-
-Again, omit the `--system` line if no system identity exists.
-
-## 7. Verify before sharing
-
-```bash
-ebus-evidence verify data/evidence.zip
-```
-
-Expected:
+Expected successful result:
 
 ```text
-Status: VALID
+Status .............. VALID
+Deterministic ....... yes
+Ready to share.
 ```
 
-A bundle created directly by the tool should also report:
+Raw context payloads are excluded by default.
 
-```text
-Deterministic layout: yes
-```
+## 6. Privacy review
 
-## 8. Privacy review
-
-The bundle exporter deliberately omits local resume metadata and does not add:
+The normal bundle exporter does not add:
 
 - absolute host paths;
 - hostnames;
 - IP addresses;
 - environment variables;
 - credentials;
+- local resume checkpoint/device/inode data;
 - full long-running raw logs.
 
-The generated system identity contains only the approved technical identity fields plus the optional user-declared product manufacturer/model and the topology signature.
+The shared evidence state retains **absolute timestamps** for observation and
+matched evidence. This is intentional because timing is part of reproducible
+protocol evidence.
 
-The shared evidence state retains **absolute timestamps** for the observation window and matched evidence. This is intentional because timing is part of reproducible protocol evidence. If the exact dates/times of the observation are sensitive, review that information before public sharing. New bundles disclose this explicitly in `manifest.json` as:
+Review the exact observation period before public sharing if it is sensitive.
 
-```text
-absolute_timestamps_included: true
+Raw context is included only after an explicit request:
+
+```bash
+./evidence export --include-context-raw
 ```
 
-If small context `.raw` files are explicitly included, they contain actual eBUS payloads from the bounded trigger window. Review them before posting publicly.
+Review raw context before posting it publicly.
 
-For the first public exchange, use the default bundle behavior. Raw context is excluded unless `--include-context-raw` is explicitly supplied.
+## 7. Optional offline analysis
 
-## 9. Observation scope
+To inspect historical raw-log content without creating persistent collection
+state:
 
-A persistent watch state now records how much bus traffic was actually observed:
+```bash
+./evidence analyze --profile hw5103-open-evidence
+```
+
+For known UTC source timestamps:
+
+```bash
+./evidence analyze \
+  --profile hw5103-open-evidence \
+  --source-timezone UTC \
+  --display-timezone Europe/Berlin
+```
+
+This is useful research output, but it is separate from the normal
+`collect -> export` contribution path.
+
+## 8. Observation scope
+
+Persistent collection records:
 
 ```text
 frames_seen
@@ -211,21 +215,12 @@ first_frame_timestamp
 last_frame_timestamp
 ```
 
-These counters are saved together with the watch checkpoint, so a clean resume does not silently double-count already persisted data.
+This matters especially for negative evidence. A value not seen during a short
+test is different from a value not seen across a multi-day observation.
 
-This matters especially for negative evidence. For example:
+## 9. What we compare
 
-```text
-value X was not observed
-```
-
-must be interpreted together with the number of complete frames and the observed time span. A short test and a multi-day observation are not equivalent.
-
-No duration is fabricated when the raw timestamp timezone is unknown. The original first/last frame timestamps are preserved; timezone-aware UTC/display forms are included when the source timezone was explicitly supplied.
-
-## 10. What we compare
-
-The primary cross-installation questions are factual:
+The primary cross-installation questions remain factual:
 
 - Is the same request identity present?
 - Are response shapes compatible?
@@ -236,4 +231,5 @@ The primary cross-installation questions are factual:
 
 Frequency alone is not sufficient to promote a protocol meaning.
 
-A semantic name should remain separate from the evidence until it has independent support.
+A semantic name should remain separate from the evidence until it has
+independent support.

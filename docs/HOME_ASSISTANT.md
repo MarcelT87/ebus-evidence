@@ -101,7 +101,7 @@ For example, after copying it to your home directory:
 install `ebus-evidence` on that computer using [Installation and first run](INSTALL.md), then run:
 
 ```bash
-ebus-evidence doctor \
+./evidence doctor \
   --raw ~/ebusd.raw \
   --profile hw5103-open-evidence
 ```
@@ -109,12 +109,31 @@ ebus-evidence doctor \
 Then:
 
 ```bash
-ebus-evidence analyze \
+./evidence analyze \
   --raw ~/ebusd.raw \
   --profile hw5103-open-evidence
 ```
 
 For a first test, this copied-file workflow is preferred over trying to create a permanent live connection into Home Assistant OS.
+
+### Important: copied files vs persistent collection
+
+A one-time copied raw log is excellent for `doctor` and offline `analyze`.
+
+The beginner `collect -> export` workflow is a **persistent follower**: a fresh
+collection starts at the current end of a readable raw-log file and then follows
+new records, keeping a continuity checkpoint.
+
+Therefore a static copied file is not currently a historical import into
+persistent evidence state.
+
+To produce a meaningful persistent evidence ZIP, run `collect` where the raw
+file remains readable and continues to grow. Do not repeatedly replace the file
+behind an existing checkpoint.
+
+A future explicit historical-import workflow may address this use case; the
+current documentation does not pretend that a one-time static copy is
+equivalent to live/resumable collection.
 
 ---
 
