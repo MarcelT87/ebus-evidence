@@ -2,7 +2,16 @@ import json
 
 import pytest
 
-from ebus_evidence.state import EvidenceStateStore, StateError, load_state, new_state, update_state
+from ebus_evidence.state import (
+    EvidenceStateStore,
+    StateError,
+    load_state,
+    new_state,
+    update_observation_frame,
+    update_observation_non_frame,
+    update_observation_skip,
+    update_state,
+)
 
 
 PROFILE = {
@@ -119,3 +128,39 @@ def test_legacy_checkpoint_without_anchor_is_still_accepted(tmp_path):
 
     loaded = load_state(path, PROFILE)
     assert loaded["checkpoint"] == {"device": 1, "inode": 2, "offset": 3}
+
+
+def test_state_tracks_observation_scope_independently_of_matches():
+    state = new_state(PROFILE)
+    timestamp = {
+        "raw": "2026-10-01 21:00:00.000",
+        "utc": "2026-10-01T21:00:00.000Z",
+        "display": "2026-10-01T23:00:00.000+02:00",
+    }
+
+    update_observation_frame(state, timestamp, initiated_by_ebusd=False)
+    update_observation_frame(state, timestamp, initiated_by_ebusd=True)
+    update_observation_non_frame(state)
+    update_observation_skip(state)
+
+    observation = state["observation"]
+    assert observation["frames_seen"] == 2
+    assert observation["passive_frames"] == 1
+    assert observation["ebusd_initiated_frames"] == 1
+    assert observation["non_frames"] == 1
+    assert observation["skipped"] == 1
+    assert observation["first_frame_timestamp"] == timestamp
+    assert observation["last_frame_timestamp"] == timestamp
+    assert state["total_events"] == 0
+
+
+def test_old_state_without_observation_is_backward_compatible(tmp_path):
+    path = tmp_path / "state.json"
+    state = new_state(PROFILE)
+    state.pop("observation")
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    loaded = load_state(path, PROFILE)
+    assert loaded["observation"]["frames_seen"] == 0
+    assert loaded["observation"]["passive_frames"] == 0
+    assert loaded["observation"]["ebusd_initiated_frames"] == 0
