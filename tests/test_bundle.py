@@ -149,12 +149,14 @@ def test_bundle_is_deterministic_and_checksums_verify(tmp_path):
         PROFILE,
         state_path=state_path,
         context_dir=context_dir,
+        include_context_raw=True,
     )
     result2 = create_bundle(
         second,
         PROFILE,
         state_path=state_path,
         context_dir=context_dir,
+        include_context_raw=True,
     )
 
     assert first.read_bytes() == second.read_bytes()
@@ -200,7 +202,7 @@ def test_bundle_is_deterministic_and_checksums_verify(tmp_path):
             assert hashlib.sha256(archive.read(name)).hexdigest() == expected
 
 
-def test_bundle_can_exclude_context_raw(tmp_path):
+def test_bundle_excludes_context_raw_by_default(tmp_path):
     context_dir = tmp_path / "contexts"
     _write_context(context_dir)
     output = tmp_path / "metadata-only.zip"
@@ -209,7 +211,6 @@ def test_bundle_can_exclude_context_raw(tmp_path):
         output,
         PROFILE,
         context_dir=context_dir,
-        include_context_raw=False,
     )
 
     with zipfile.ZipFile(output) as archive:
@@ -261,6 +262,7 @@ def test_verify_accepts_valid_bundle(tmp_path):
         PROFILE,
         state_path=state_path,
         context_dir=context_dir,
+        include_context_raw=True,
     )
     verified = verify_bundle(output)
 
@@ -434,3 +436,28 @@ def test_verify_rejects_invalid_observation_counts(tmp_path):
 
     with pytest.raises(BundleError, match="must sum to frames_seen"):
         verify_bundle(invalid)
+
+
+def test_bundle_can_explicitly_include_context_raw(tmp_path):
+    context_dir = tmp_path / "contexts"
+    _write_context(context_dir)
+    output = tmp_path / "with-raw.zip"
+
+    result = create_bundle(
+        output,
+        PROFILE,
+        context_dir=context_dir,
+        include_context_raw=True,
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        assert "contexts/20261001T100000.000_rare_0001.raw" in archive.namelist()
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["context_raw_count"] == 1
+        assert manifest["context_raw_included"] is True
+        assert (
+            manifest["privacy"]["review_context_raw_before_public_sharing"]
+            is True
+        )
+
+    assert result["manifest"]["context_raw_count"] == 1
