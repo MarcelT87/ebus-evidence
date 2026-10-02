@@ -41,6 +41,7 @@ def _profile_version(profile: dict[str, Any]) -> int:
 def profile_fingerprint(profile: dict[str, Any]) -> str:
     """Fingerprint profile behavior while ignoring presentation-only descriptions."""
     semantic = deepcopy(profile)
+    semantic["version"] = _profile_version(profile)
     semantic.pop("description", None)
     checks = semantic.get("checks", [])
     if isinstance(checks, list):
@@ -216,6 +217,10 @@ def _validate_state_shape(state: dict[str, Any]) -> None:
     )
     if not isinstance(state.get("checks"), dict):
         raise StateError("state checks must be a mapping")
+    for key in ("created_at", "updated_at"):
+        value = state.get(key)
+        if not isinstance(value, str) or not value:
+            raise StateError(f"state requires non-empty {key}")
 
     total_events = state.get("total_events")
     if (
