@@ -187,12 +187,12 @@ For normal community contribution, submit:
 data/evidence.zip
 ```
 
-Open a GitHub issue using the **Evidence submission** template, attach the ZIP
-and paste the output of:
+Open a GitHub issue using the **Evidence submission** form and upload the ZIP
+in its required `.zip` field.
 
-```bash
-./evidence verify data/evidence.zip
-```
+There is no verifier-output copy/paste step. `./evidence export` already
+verifies the generated bundle, and maintainers independently verify incoming
+files.
 
 Do not attach the complete `ebusd.raw` file.
 
