@@ -155,9 +155,9 @@ Current provenance records:
   `ebus_evidence` runtime package;
 - `profile_sha256` — SHA-256 of the exact canonical `profile.yaml` bytes
   embedded in the bundle;
-- `git.commit` and `git.dirty` — optional source-checkout information when
-  the installed runtime can be associated safely with an `ebus-evidence`
-  Git checkout.
+- `git.commit` and `git.dirty` — optional source-checkout information only
+  when the running package directory is exactly the checkout's
+  `src/ebus_evidence` directory.
 
 The runtime hash algorithm identifier is:
 
@@ -174,9 +174,13 @@ This deliberately excludes host paths, timestamps, usernames and machine
 identity, so provenance does not make otherwise deterministic bundles depend on
 local environment details.
 
-`git` is `null` when Git metadata cannot be determined safely. A missing Git
-record does not make the bundle invalid because the runtime and profile hashes
-remain available.
+`git` is `null` when Git metadata cannot be determined safely, including
+non-editable/wheel-style installs even when their virtual environment happens to
+live inside a Git repository. This avoids attaching an unrelated or stale outer
+checkout revision to installed runtime bytes.
+
+A missing Git record does not make the bundle invalid because the runtime and
+profile hashes remain available.
 
 The verifier validates provenance syntax and requires
 `provenance.profile_sha256` to equal the checksum of the embedded
