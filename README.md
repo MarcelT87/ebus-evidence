@@ -13,6 +13,8 @@ It is intentionally conservative:
 
 The common input is a raw-log file already written by normal [ebusd](https://github.com/john30/ebusd).
 
+> **Current research scope:** the tool itself is built around normal ebusd message-mode raw logs, but the **bundled evidence profile and the current real-world validation are focused on Vaillant-family systems**, especially the current HW5103 research installation. Other eBUS manufacturers may still be parseable at the raw-log level, but the bundled `hw5103-open-evidence` profile is not intended to produce meaningful coverage for them yet.
+
 ## What it can do
 
 - discover normal ebusd in Docker or as a native systemd service;
