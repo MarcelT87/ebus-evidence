@@ -233,9 +233,14 @@ def test_static_import_rolls_back_published_contexts_if_state_commit_fails(
     state_path = tmp_path / "data" / "evidence-state.json"
     context_dir = tmp_path / "data" / "contexts"
     original_replace = Path.replace
+    context_published = False
 
     def fail_final_state_publish(self, target):
-        if self.name == "state.json" and Path(target) == state_path:
+        nonlocal context_published
+        target_path = Path(target)
+        if target_path == context_dir:
+            context_published = True
+        if self.name == "state.json" and target_path == state_path:
             raise OSError("simulated final state publish failure")
         return original_replace(self, target)
 
@@ -243,6 +248,7 @@ def test_static_import_rolls_back_published_contexts_if_state_commit_fails(
 
     assert main(["import", "--raw", str(raw)]) == 2
     out = capsys.readouterr().out
+    assert context_published is True
     assert "simulated final state publish failure" in out
     assert not state_path.exists()
     assert not context_dir.exists()
@@ -259,9 +265,14 @@ def test_static_import_restores_preexisting_empty_context_dir_on_state_commit_fa
     context_dir = tmp_path / "data" / "contexts"
     context_dir.mkdir(parents=True)
     original_replace = Path.replace
+    context_published = False
 
     def fail_final_state_publish(self, target):
-        if self.name == "state.json" and Path(target) == state_path:
+        nonlocal context_published
+        target_path = Path(target)
+        if target_path == context_dir:
+            context_published = True
+        if self.name == "state.json" and target_path == state_path:
             raise OSError("simulated final state publish failure")
         return original_replace(self, target)
 
@@ -269,10 +280,29 @@ def test_static_import_restores_preexisting_empty_context_dir_on_state_commit_fa
 
     assert main(["import", "--raw", str(raw)]) == 2
     out = capsys.readouterr().out
+    assert context_published is True
     assert "simulated final state publish failure" in out
     assert not state_path.exists()
     assert context_dir.is_dir()
     assert list(context_dir.iterdir()) == []
+
+
+def test_static_import_succeeds_with_preexisting_empty_context_dir(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied-ebusd.raw"
+    raw.write_bytes(_matching_record("2026-10-01 10:00:01.000"))
+
+    state_path = tmp_path / "data" / "evidence-state.json"
+    context_dir = tmp_path / "data" / "contexts"
+    context_dir.mkdir(parents=True)
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    assert state_path.is_file()
+    assert context_dir.is_dir()
+    assert list(context_dir.glob("*.json"))
+    assert list(context_dir.glob("*.raw"))
 
 
 def test_static_import_restores_empty_context_dir_if_context_publish_fails(
