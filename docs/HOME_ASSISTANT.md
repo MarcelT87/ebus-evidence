@@ -108,7 +108,17 @@ install `ebus-evidence` on that computer using [Installation and first run](INST
   --profile hw5103-open-evidence
 ```
 
-Then:
+For a copied/static file, build normal exportable evidence state with:
+
+```bash
+./evidence import --raw ~/ebusd.raw
+./evidence export
+```
+
+The copied source file is only read. It is not placed in the ZIP.
+
+For inspection without building persistent/exportable state, `analyze` remains
+available:
 
 ```bash
 ./evidence analyze \
@@ -116,26 +126,14 @@ Then:
   --profile hw5103-open-evidence
 ```
 
-For a first test, this copied-file workflow is preferred over trying to create a permanent live connection into Home Assistant OS.
+For a first test, this copied-file workflow is preferred over trying to create a
+permanent live connection into Home Assistant OS.
 
-### Important: copied files vs persistent collection
+### Important: copied files vs live collection
 
-A one-time copied raw log is excellent for `doctor` and offline `analyze`.
-
-The beginner `collect -> export` workflow is a **persistent follower**: a fresh
-collection starts at the current end of a readable raw-log file and then follows
-new records, keeping a continuity checkpoint.
-
-Therefore a static copied file is not currently a historical import into
-persistent evidence state.
-
-To produce a meaningful persistent evidence ZIP, run `collect` where the raw
-file remains readable and continues to grow. Do not repeatedly replace the file
-behind an existing checkpoint.
-
-A future explicit historical-import workflow may address this use case; the
-current documentation does not pretend that a one-time static copy is
-equivalent to live/resumable collection.
+Use `import` for a completed/static copy and `collect` for a file that remains
+readable and continues to grow. Do not repeatedly replace a live file behind an
+existing collection checkpoint.
 
 ---
 
@@ -206,7 +204,7 @@ HA OS produces raw log
         ↓
 raw log leaves HA OS as a file
         ↓
-ebus-evidence analyzes the file elsewhere
+ebus-evidence imports/analyzes the file elsewhere
 ```
 
 A dedicated Home Assistant App could be considered later only if real users show that the file-based workflow is too inconvenient.
