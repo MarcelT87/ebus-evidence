@@ -92,7 +92,7 @@ mkdir -p data
 ebus-evidence system \
   --scan-result data/scan-result.txt \
   --manufacturer Vaillant \
-  --model "105/6 A" \
+  --model "YOUR-MODEL" \
   --output data/system.json
 ```
 
