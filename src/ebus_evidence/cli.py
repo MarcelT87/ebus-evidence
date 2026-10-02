@@ -265,7 +265,9 @@ def _watch(args: argparse.Namespace) -> int:
     print(f"Raw path: {raw_path} ({source})")
     print("Mode: follow new records only; Ctrl-C to stop")
     if args.seconds is not None:
-        print(f"Duration: {args.seconds:g} seconds")
+        print(f"Runtime limit: {args.seconds:g} seconds")
+        if args.state:
+            print("Resume note: saved checkpoints may replay backlog written while watch was stopped")
     if args.source_timezone:
         display = args.display_timezone or args.source_timezone
         print(f"Timestamps: raw source={args.source_timezone}, display={display}")
@@ -582,7 +584,7 @@ def build_parser() -> argparse.ArgumentParser:
     watch.add_argument(
         "--seconds",
         type=float,
-        help="optional test/runtime limit; omit to watch until Ctrl-C",
+        help="optional wall-clock runtime limit; resumed checkpoints may also replay older backlog; omit to watch until Ctrl-C",
     )
     watch.add_argument(
         "--poll-interval",
