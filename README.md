@@ -177,6 +177,10 @@ A minimal passive workflow for another installation is documented here:
 
 **[Community cross-installation test](docs/COMMUNITY_TEST.md)**
 
+For hardware/firmware comparisons, create a privacy-minimized system identity from an **existing** `ebusctl scan result`:
+
+**[System identity](docs/SYSTEM_IDENTITY.md)**
+
 Cross-installation evidence is the main reason this project exists.
 
 ## Profiles
