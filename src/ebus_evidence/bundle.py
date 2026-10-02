@@ -12,6 +12,11 @@ import yaml
 from ebus_evidence import __version__
 from ebus_evidence.profiles.loader import ProfileError, validate_profile_data
 from ebus_evidence.state import load_state
+from ebus_evidence.system_identity import (
+    SystemIdentityError,
+    load_system_document,
+    validate_system_document,
+)
 
 
 _BUNDLE_FORMAT = "ebus-evidence-bundle-v1"
@@ -142,6 +147,7 @@ def create_bundle(
     *,
     state_path: str | Path | None = None,
     context_dir: str | Path | None = None,
+    system_path: str | Path | None = None,
     include_context_raw: bool = True,
 ) -> dict[str, Any]:
     if state_path is None and context_dir is None:
@@ -163,6 +169,14 @@ def create_bundle(
             raise BundleError(f"cannot load evidence state: {exc}") from exc
         state_summary = shared_state(state)
         members.append(("evidence/state.json", _canonical_json(state_summary)))
+
+    system_identity = None
+    if system_path is not None:
+        try:
+            system_identity = load_system_document(system_path)
+        except SystemIdentityError as exc:
+            raise BundleError(f"cannot load system identity: {exc}") from exc
+        members.append(("system.json", _canonical_json(system_identity)))
 
     context_members = _load_contexts(
         context_dir,
@@ -189,6 +203,7 @@ def create_bundle(
         "profile": profile["name"],
         "profile_version": profile.get("version", 1),
         "evidence_state_included": state_summary is not None,
+        "system_identity_included": system_identity is not None,
         "context_metadata_count": context_metadata_count,
         "context_raw_count": context_raw_count,
         "context_raw_included": context_raw_count > 0,
@@ -235,6 +250,7 @@ def create_bundle(
         "path": output_path,
         "members": [name for name, _ in members],
         "manifest": manifest,
+        "system_identity": system_identity,
         "sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
     }
 
@@ -315,7 +331,7 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         if missing:
             raise BundleError(f"missing required bundle members: {', '.join(missing)}")
 
-        allowed_fixed = required | {"evidence/state.json"}
+        allowed_fixed = required | {"evidence/state.json", "system.json"}
         for name in names:
             if name in allowed_fixed:
                 continue
@@ -382,6 +398,19 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         state_present = "evidence/state.json" in names
         if bool(manifest.get("evidence_state_included")) != state_present:
             raise BundleError("manifest evidence_state_included does not match ZIP contents")
+
+        system_present = "system.json" in names
+        if bool(manifest.get("system_identity_included")) != system_present:
+            raise BundleError("manifest system_identity_included does not match ZIP contents")
+
+        system_identity = None
+        if system_present:
+            try:
+                system_identity = validate_system_document(
+                    _json_member(archive, "system.json")
+                )
+            except SystemIdentityError as exc:
+                raise BundleError(f"invalid system.json: {exc}") from exc
 
         if state_present:
             state = _json_member(archive, "evidence/state.json")
@@ -502,6 +531,12 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         "profile": profile["name"],
         "profile_version": profile.get("version", 1),
         "state_included": state_present,
+        "system_identity_included": system_present,
+        "topology_signature_sha256": (
+            system_identity["topology_signature_sha256"]
+            if system_identity is not None
+            else None
+        ),
         "context_metadata_count": len(context_metadata_names),
         "context_raw_count": len(context_raw_names),
         "deterministic_layout": deterministic_layout,
