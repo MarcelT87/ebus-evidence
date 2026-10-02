@@ -475,6 +475,8 @@ If you do not have `data/system.json`, again omit the `--system` line.
 
 Review any explicitly included raw context before publishing it.
 
+The normal shared state also contains absolute observation/evidence timestamps. These are kept because timing is useful research evidence. New bundles declare this in their privacy manifest and the CLI prints `Absolute timestamps: yes`. Review the exact observation period before public sharing if it is sensitive.
+
 
 ---
 
