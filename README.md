@@ -82,9 +82,10 @@ Requirements:
 - Git
 - an existing normal ebusd message-mode raw log, or a local Docker/systemd ebusd installation that can be discovered
 
-Install:
+Install into your home directory:
 
 ```bash
+cd ~
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
 
@@ -93,6 +94,8 @@ source .venv/bin/activate
 
 python -m pip install -e .
 ```
+
+The repository is now normally at `~/ebus-evidence`. Keep generated evidence under its ignored `data/` directory rather than adding it to Git.
 
 Try automatic read-only discovery:
 
@@ -138,22 +141,27 @@ When a persistent state file is used, the shared evidence also records the obser
 
 ## Share evidence
 
-Create a deterministic state/context bundle:
+For hardware/firmware comparison, first create a privacy-minimized `data/system.json` from an **existing** `ebusctl scan result` when one is available. See [System identity](docs/SYSTEM_IDENTITY.md). Do not start a new active scan merely for this project.
+
+Then create the normal privacy-first bundle:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --output evidence.zip
+  --system data/system.json \
+  --output data/evidence.zip
 ```
+
+If no existing system identity is available, omit the `--system` line.
 
 **Raw context files are excluded by default.** Context metadata can still be included.
 
 Verify it before sharing:
 
 ```bash
-ebus-evidence verify evidence.zip
+ebus-evidence verify data/evidence.zip
 ```
 
 A valid bundle reports:
@@ -169,8 +177,9 @@ ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
+  --system data/system.json \
   --include-context-raw \
-  --output evidence-with-context-raw.zip
+  --output data/evidence-with-context-raw.zip
 ```
 
 The exporter deliberately omits local resume checkpoint details, absolute local paths, host metadata and credentials. Explicitly included context `.raw` files contain real eBUS payloads and should be reviewed before public sharing.
