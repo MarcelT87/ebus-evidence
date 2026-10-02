@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from copy import deepcopy
@@ -16,9 +17,50 @@ class StateError(ValueError):
     pass
 
 
+class ProfileRolloverRequired(StateError):
+    def __init__(self, current_version: int, requested_version: int):
+        self.current_version = current_version
+        self.requested_version = requested_version
+        super().__init__(
+            "state profile rollover required: "
+            f"v{current_version} -> v{requested_version}"
+        )
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
+
+def _profile_version(profile: dict[str, Any]) -> int:
+    value = profile.get("version", 1)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise StateError("profile version must be a positive integer")
+    return value
+
+
+def profile_fingerprint(profile: dict[str, Any]) -> str:
+    """Fingerprint profile behavior while ignoring presentation-only descriptions."""
+    semantic = deepcopy(profile)
+    semantic.pop("description", None)
+    checks = semantic.get("checks", [])
+    if isinstance(checks, list):
+        normalized_checks = []
+        for check in checks:
+            item = deepcopy(check)
+            if isinstance(item, dict):
+                item.pop("description", None)
+            normalized_checks.append(item)
+        semantic["checks"] = sorted(
+            normalized_checks,
+            key=lambda item: str(item.get("id", "")) if isinstance(item, dict) else "",
+        )
+    payload = json.dumps(
+        semantic,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _new_observation() -> dict[str, Any]:
@@ -55,11 +97,13 @@ def new_state(profile: dict[str, Any]) -> dict[str, Any]:
     return {
         "format": _STATE_FORMAT,
         "profile": profile["name"],
-        "profile_version": profile.get("version", 1),
+        "profile_version": _profile_version(profile),
+        "profile_fingerprint": profile_fingerprint(profile),
         "created_at": now,
         "updated_at": now,
         "total_events": 0,
         "observation": _new_observation(),
+        "epochs": [],
         "checkpoint": None,
         "continuity": {
             "resets": [],
@@ -71,24 +115,20 @@ def new_state(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _validate_state(state: dict[str, Any], profile: dict[str, Any]) -> None:
-    if state.get("format") != _STATE_FORMAT:
-        raise StateError("unsupported state format")
-    if state.get("profile") != profile["name"]:
-        raise StateError(
-            f"state profile mismatch: {state.get('profile')!r} != {profile['name']!r}"
-        )
-    if state.get("profile_version") != profile.get("version", 1):
-        raise StateError(
-            "state profile version mismatch: "
-            f"{state.get('profile_version')!r} != {profile.get('version', 1)!r}"
-        )
-    if not isinstance(state.get("checks"), dict):
-        raise StateError("state checks must be a mapping")
+def _validate_sha256_or_none(value: Any, *, label: str) -> None:
+    if value is None:
+        return
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(ch not in "0123456789abcdef" for ch in value)
+    ):
+        raise StateError(f"{label} must be a lowercase SHA-256 hex digest or null")
 
-    observation = state.get("observation")
+
+def _validate_observation(observation: Any, *, label: str) -> None:
     if not isinstance(observation, dict):
-        raise StateError("state observation must be a mapping")
+        raise StateError(f"{label} must be a mapping")
     for key in (
         "frames_seen",
         "passive_frames",
@@ -98,18 +138,99 @@ def _validate_state(state: dict[str, Any], profile: dict[str, Any]) -> None:
     ):
         value = observation.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            raise StateError(f"state observation {key} must be a non-negative integer")
+            raise StateError(f"{label} {key} must be a non-negative integer")
     if (
         observation["passive_frames"] + observation["ebusd_initiated_frames"]
         != observation["frames_seen"]
     ):
         raise StateError(
-            "state observation passive/initiated frame counts must sum to frames_seen"
+            f"{label} passive/initiated frame counts must sum to frames_seen"
         )
     for key in ("first_frame_timestamp", "last_frame_timestamp"):
         value = observation.get(key)
         if value is not None and not isinstance(value, dict):
-            raise StateError(f"state observation {key} must be a mapping or null")
+            raise StateError(f"{label} {key} must be a mapping or null")
+
+
+def _validate_epochs(
+    epochs: Any,
+    *,
+    profile_name: str,
+    active_version: int,
+) -> None:
+    if not isinstance(epochs, list):
+        raise StateError("state epochs must be a list")
+
+    previous_version = 0
+    for index, epoch in enumerate(epochs):
+        label = f"state epoch {index}"
+        if not isinstance(epoch, dict):
+            raise StateError(f"{label} must be a mapping")
+        if epoch.get("profile") != profile_name:
+            raise StateError(f"{label} profile mismatch")
+        version = epoch.get("profile_version")
+        if (
+            not isinstance(version, int)
+            or isinstance(version, bool)
+            or version < 1
+            or version >= active_version
+        ):
+            raise StateError(
+                f"{label} profile_version must be a positive integer below active version"
+            )
+        if version <= previous_version:
+            raise StateError("state epoch profile versions must be strictly increasing")
+        previous_version = version
+
+        _validate_sha256_or_none(
+            epoch.get("profile_fingerprint"),
+            label=f"{label} profile_fingerprint",
+        )
+        for key in ("created_at", "updated_at", "ended_at"):
+            value = epoch.get(key)
+            if not isinstance(value, str) or not value:
+                raise StateError(f"{label} requires non-empty {key}")
+        total_events = epoch.get("total_events")
+        if (
+            not isinstance(total_events, int)
+            or isinstance(total_events, bool)
+            or total_events < 0
+        ):
+            raise StateError(f"{label} total_events must be a non-negative integer")
+        _validate_observation(epoch.get("observation"), label=f"{label} observation")
+        if not isinstance(epoch.get("checks"), dict):
+            raise StateError(f"{label} checks must be a mapping")
+
+
+def _validate_state_shape(state: dict[str, Any]) -> None:
+    if state.get("format") != _STATE_FORMAT:
+        raise StateError("unsupported state format")
+    if not isinstance(state.get("profile"), str) or not state["profile"]:
+        raise StateError("state profile must be a non-empty string")
+    version = state.get("profile_version")
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        raise StateError("state profile_version must be a positive integer")
+    _validate_sha256_or_none(
+        state.get("profile_fingerprint"),
+        label="state profile_fingerprint",
+    )
+    if not isinstance(state.get("checks"), dict):
+        raise StateError("state checks must be a mapping")
+
+    total_events = state.get("total_events")
+    if (
+        not isinstance(total_events, int)
+        or isinstance(total_events, bool)
+        or total_events < 0
+    ):
+        raise StateError("state total_events must be a non-negative integer")
+
+    _validate_observation(state.get("observation"), label="state observation")
+    _validate_epochs(
+        state.get("epochs"),
+        profile_name=state["profile"],
+        active_version=version,
+    )
 
     checkpoint = state.get("checkpoint")
     if checkpoint is not None:
@@ -135,11 +256,82 @@ def _validate_state(state: dict[str, Any], profile: dict[str, Any]) -> None:
                     "state checkpoint anchor_sha256 must be a lowercase SHA-256 hex digest"
                 )
 
+    continuity = state.get("continuity")
+    if not isinstance(continuity, dict):
+        raise StateError("state continuity must be a mapping")
+    resets = continuity.get("resets")
+    if not isinstance(resets, list):
+        raise StateError("state continuity resets must be a list")
 
-def load_state(path: str | Path, profile: dict[str, Any]) -> dict[str, Any]:
+
+def _validate_active_profile(state: dict[str, Any], profile: dict[str, Any]) -> None:
+    if state.get("profile") != profile["name"]:
+        raise StateError(
+            f"state profile mismatch: {state.get('profile')!r} != {profile['name']!r}"
+        )
+
+    expected_version = _profile_version(profile)
+    if state.get("profile_version") != expected_version:
+        raise StateError(
+            "state profile version mismatch: "
+            f"{state.get('profile_version')!r} != {expected_version!r}"
+        )
+
+    expected_checks = {check["id"] for check in profile["checks"]}
+    actual_checks = set(state["checks"])
+    if actual_checks != expected_checks:
+        raise StateError(
+            "state check set differs from the profile without a version bump"
+        )
+
+    expected_fingerprint = profile_fingerprint(profile)
+    current_fingerprint = state.get("profile_fingerprint")
+    if current_fingerprint is None:
+        state["profile_fingerprint"] = expected_fingerprint
+    elif current_fingerprint != expected_fingerprint:
+        raise StateError(
+            "state profile semantics changed without a profile version bump"
+        )
+
+
+def _archive_active_epoch(state: dict[str, Any], *, ended_at: str) -> dict[str, Any]:
+    return {
+        "profile": state["profile"],
+        "profile_version": state["profile_version"],
+        "profile_fingerprint": state.get("profile_fingerprint"),
+        "created_at": state["created_at"],
+        "updated_at": state["updated_at"],
+        "ended_at": ended_at,
+        "total_events": int(state.get("total_events", 0)),
+        "observation": deepcopy(state["observation"]),
+        "checks": deepcopy(state["checks"]),
+    }
+
+
+def _rollover_state(
+    state: dict[str, Any],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    ended_at = _utc_now()
+    archived = _archive_active_epoch(state, ended_at=ended_at)
+    replacement = new_state(profile)
+    replacement["epochs"] = deepcopy(state.get("epochs", [])) + [archived]
+    replacement["checkpoint"] = deepcopy(state.get("checkpoint"))
+    replacement["continuity"] = deepcopy(
+        state.get("continuity", {"resets": []})
+    )
+    return replacement
+
+
+def _load_state(
+    path: str | Path,
+    profile: dict[str, Any],
+    *,
+    allow_profile_rollover: bool,
+) -> tuple[dict[str, Any], int | None]:
     state_path = Path(path)
     if not state_path.exists():
-        return new_state(profile)
+        return new_state(profile), None
     try:
         data = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -151,19 +343,53 @@ def load_state(path: str | Path, profile: dict[str, Any]) -> dict[str, Any]:
     data.setdefault("checkpoint", None)
     data.setdefault("observation", _new_observation())
     data.setdefault("continuity", {"resets": []})
+    data.setdefault("epochs", [])
+    data.setdefault("profile_fingerprint", None)
     if not isinstance(data["continuity"], dict):
         raise StateError("state continuity must be a mapping")
     data["continuity"].setdefault("resets", [])
-    if not isinstance(data["continuity"]["resets"], list):
-        raise StateError("state continuity resets must be a list")
 
-    _validate_state(data, profile)
+    _validate_state_shape(data)
 
-    # Allow descriptions/check ordering to evolve only when the profile
-    # version was intentionally kept compatible.
-    for check in profile["checks"]:
-        data["checks"].setdefault(check["id"], _new_check(check))
-    return data
+    if data.get("profile") != profile["name"]:
+        raise StateError(
+            f"state profile mismatch: {data.get('profile')!r} != {profile['name']!r}"
+        )
+
+    stored_version = int(data["profile_version"])
+    requested_version = _profile_version(profile)
+
+    if stored_version == requested_version:
+        _validate_active_profile(data, profile)
+        return data, None
+
+    if requested_version < stored_version:
+        raise StateError(
+            "state profile downgrade is not supported: "
+            f"v{stored_version} -> v{requested_version}"
+        )
+
+    if not allow_profile_rollover:
+        raise ProfileRolloverRequired(stored_version, requested_version)
+
+    rolled = _rollover_state(data, profile)
+    _validate_state_shape(rolled)
+    _validate_active_profile(rolled, profile)
+    return rolled, stored_version
+
+
+def load_state(
+    path: str | Path,
+    profile: dict[str, Any],
+    *,
+    allow_profile_rollover: bool = False,
+) -> dict[str, Any]:
+    state, _ = _load_state(
+        path,
+        profile,
+        allow_profile_rollover=allow_profile_rollover,
+    )
+    return state
 
 
 def update_observation_frame(
@@ -266,15 +492,31 @@ class EvidenceStateStore:
     path: Path
     profile: dict[str, Any]
     state: dict[str, Any]
+    rolled_over_from: int | None = None
 
     @classmethod
-    def open(cls, path: str | Path, profile: dict[str, Any]) -> "EvidenceStateStore":
+    def open(
+        cls,
+        path: str | Path,
+        profile: dict[str, Any],
+        *,
+        allow_profile_rollover: bool = False,
+    ) -> "EvidenceStateStore":
         state_path = Path(path)
-        return cls(
+        state, rolled_over_from = _load_state(
+            state_path,
+            profile,
+            allow_profile_rollover=allow_profile_rollover,
+        )
+        store = cls(
             path=state_path,
             profile=profile,
-            state=load_state(state_path, profile),
+            state=state,
+            rolled_over_from=rolled_over_from,
         )
+        if rolled_over_from is not None:
+            store.save()
+        return store
 
     def save(self) -> None:
         save_state(self.path, self.state)
@@ -313,6 +555,24 @@ class EvidenceStateStore:
     def checkpoint(self) -> dict[str, Any] | None:
         value = self.state.get("checkpoint")
         return deepcopy(value) if isinstance(value, dict) else None
+
+    @property
+    def historical_epochs(self) -> list[dict[str, Any]]:
+        value = self.state.get("epochs", [])
+        return deepcopy(value) if isinstance(value, list) else []
+
+    @property
+    def historical_frames(self) -> int:
+        return sum(
+            int(epoch["observation"]["frames_seen"])
+            for epoch in self.state.get("epochs", [])
+            if isinstance(epoch, dict)
+            and isinstance(epoch.get("observation"), dict)
+        )
+
+    @property
+    def total_observed_frames(self) -> int:
+        return self.historical_frames + int(self.state["observation"]["frames_seen"])
 
     def set_checkpoint(self, checkpoint: dict[str, Any], *, save: bool = True) -> bool:
         normalized: dict[str, Any] = {
