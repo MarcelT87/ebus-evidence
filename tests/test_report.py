@@ -3,7 +3,7 @@ from pathlib import Path
 from ebus_evidence.input.raw_file import iter_frames
 from ebus_evidence.models import Frame
 from ebus_evidence.profiles.loader import load_profile
-from ebus_evidence.report import analyze_frames, format_text
+from ebus_evidence.report import analyze_frames, format_text, shareable_report
 
 
 ROOT = Path(__file__).parents[1]
@@ -108,3 +108,21 @@ def test_missing_response_is_not_a_decode_error():
     assert "<none>" in text
     assert "no response: 1" in text
     assert frame.timestamp in text
+
+
+def test_shareable_report_omits_absolute_raw_path():
+    report = {
+        "format": "ebus-evidence-report-v2",
+        "raw_path": "/private/host/path/ebusd.raw",
+        "raw_path_source": "manual",
+        "source_files": ["ebusd.raw"],
+        "checks": [],
+    }
+
+    exported = shareable_report(report)
+
+    assert "raw_path" not in exported
+    assert exported["raw_path_source"] == "manual"
+    assert exported["source_files"] == ["ebusd.raw"]
+    assert exported["privacy"] == {"absolute_paths_included": False}
+    assert report["raw_path"] == "/private/host/path/ebusd.raw"
