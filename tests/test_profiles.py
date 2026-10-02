@@ -65,3 +65,39 @@ checks:
 
     with pytest.raises(ProfileError, match="unsupported when keys"):
         load_profile(path)
+
+
+def test_profile_rejects_non_integer_version(tmp_path):
+    path = tmp_path / "bad-version.yaml"
+    path.write_text(
+        """
+name: bad-version
+version: three
+checks:
+  - id: check
+    match: {}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ProfileError, match="positive integer"):
+        load_profile(path)
+
+
+def test_profile_rejects_zero_version(tmp_path):
+    path = tmp_path / "zero-version.yaml"
+    path.write_text(
+        """
+name: zero-version
+version: 0
+checks:
+  - id: check
+    match: {}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ProfileError, match="positive integer"):
+        load_profile(path)
