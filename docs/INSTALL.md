@@ -301,6 +301,17 @@ A later run:
 
 reuses the saved checkpoint and resumes when continuity can be proven.
 
+Only one state-writing process may use the same evidence state at a time.
+`collect`, `import`, and expert `watch --state` share the same local
+single-writer lock. If another writer is already using that state, the second
+command stops with a clear error instead of risking divergent checkpoints or
+overwriting evidence.
+
+The small hidden `.writer.lock` file may remain after the command exits. That
+is expected: lock ownership is held by the operating system, not by the
+existence of the file. Do not delete the file to try to override a genuinely
+running writer.
+
 The optional `--seconds` argument is reserved for controlled diagnostics and
 automated tests. Beginners do not need it for normal collection.
 
