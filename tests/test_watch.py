@@ -104,9 +104,11 @@ def test_watch_tracks_completed_unparseable_records_by_reason(tmp_path, monkeypa
             with path.open("ab") as handle:
                 handle.write(b"2026-10-01 10:00:01.000 <a\n")
                 handle.write(_record("2026-10-01 10:00:02.000"))
+        elif calls["count"] == 2:
+            raise KeyboardInterrupt
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
-    stats = run_watch(path, {"name": "none", "version": 1, "checks": []}, seconds=0.01)
+    stats = run_watch(path, {"name": "none", "version": 1, "checks": []})
 
     assert stats.skipped_records == 1
     assert stats.skip_reasons["master segment has an odd number of hex digits"] == 1
@@ -142,9 +144,11 @@ def test_watch_keeps_bounded_skip_samples(tmp_path, monkeypatch):
                         f"2026-10-01 10:00:0{second}.000 <a\n".encode("ascii")
                     )
                 handle.write(_record("2026-10-01 10:00:06.000"))
+        elif calls["count"] == 2:
+            raise KeyboardInterrupt
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
-    stats = run_watch(path, {"name": "none", "version": 1, "checks": []}, seconds=0.01)
+    stats = run_watch(path, {"name": "none", "version": 1, "checks": []})
 
     reason = "master segment has an odd number of hex digits"
     assert stats.skipped_records == 5
@@ -166,9 +170,11 @@ def test_watch_classifies_short_raw_fragments_as_non_frames(tmp_path, monkeypatc
                 handle.write(b"2026-10-01 10:00:01.000 <00\n")
                 handle.write(b"2026-10-01 10:00:02.000 <01\n")
                 handle.write(_record("2026-10-01 10:00:03.000"))
+        elif calls["count"] == 2:
+            raise KeyboardInterrupt
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
-    stats = run_watch(path, {"name": "none", "version": 1, "checks": []}, seconds=0.01)
+    stats = run_watch(path, {"name": "none", "version": 1, "checks": []})
 
     assert stats.non_frame_records == 2
     assert stats.non_frame_kinds["short_fragment"] == 2
@@ -294,20 +300,20 @@ def test_state_writes_are_batched_between_initial_and_final_flush(tmp_path, monk
             with path.open("ab") as handle:
                 handle.write(_record("2026-10-01 10:00:01.000"))
                 handle.write(_record("2026-10-01 10:00:02.000"))
+        elif calls["count"] == 2:
+            raise KeyboardInterrupt
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
 
     run_watch(
         path,
         profile,
-        seconds=0.01,
         state_store=store,
         state_flush_interval=3600,
     )
 
-    # One immediate write establishes the first checkpoint. Despite many poll
-    # iterations, all subsequent cursor movement is persisted only by the
-    # forced final flush.
+    # One immediate write establishes the first checkpoint. Subsequent cursor
+    # movement stays staged until the forced final flush.
     assert len(writes) == 2
 
 
@@ -328,13 +334,14 @@ def test_watch_persists_observation_without_profile_matches(tmp_path, monkeypatc
                 handle.write(b"2026-10-01 10:00:02.000 <00\n")
                 handle.write(b"2026-10-01 10:00:03.000 <a\n")
                 handle.write(_record("2026-10-01 10:00:04.000"))
+        elif calls["count"] == 2:
+            raise KeyboardInterrupt
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", fake_sleep)
 
     run_watch(
         path,
         profile,
-        seconds=0.01,
         state_store=store,
         state_flush_interval=3600,
         source_timezone="UTC",
@@ -365,12 +372,13 @@ def test_watch_resume_does_not_double_count_persisted_observation(tmp_path, monk
             with path.open("ab") as handle:
                 handle.write(_record("2026-10-01 10:00:01.000"))
                 handle.write(_record("2026-10-01 10:00:02.000"))
+        elif first_calls["count"] == 2:
+            raise KeyboardInterrupt
 
     monkeypatch.setattr("ebus_evidence.watch.time.sleep", first_sleep)
     run_watch(
         path,
         profile,
-        seconds=0.01,
         state_store=store,
         state_flush_interval=3600,
     )
@@ -383,11 +391,14 @@ def test_watch_resume_does_not_double_count_persisted_observation(tmp_path, monk
         handle.write(_record("2026-10-01 10:00:04.000"))
 
     second_store = EvidenceStateStore.open(state_path, profile)
-    monkeypatch.setattr("ebus_evidence.watch.time.sleep", lambda _seconds: None)
+
+    def stop_after_poll(_seconds):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("ebus_evidence.watch.time.sleep", stop_after_poll)
     run_watch(
         path,
         profile,
-        seconds=0.001,
         state_store=second_store,
         state_flush_interval=3600,
     )
