@@ -25,10 +25,21 @@ The test does not require:
 
 ## 1. Install
 
+Choose any directory where your user can write. The home directory is only the
+simple example below; no specific system path is required.
+
 ```bash
-cd ~
+cd ~   # example only
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
+bash install.sh
+```
+
+Alternatively:
+
+```bash
+git clone https://github.com/MarcelT87/ebus-evidence.git /path/to/ebus-evidence
+cd /path/to/ebus-evidence
 bash install.sh
 ```
 
