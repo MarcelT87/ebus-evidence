@@ -19,6 +19,7 @@ from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.report import analyze_frames, format_text
 from ebus_evidence.timeutil import TimezoneError, get_timezone
 from ebus_evidence.state import EvidenceStateStore, StateError
+from ebus_evidence.system_identity import SystemIdentityError, create_system_document
 from ebus_evidence.watch import ResumeError, run_watch
 
 
@@ -360,6 +361,42 @@ def _watch(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def _system(args: argparse.Namespace) -> int:
+    try:
+        document = create_system_document(
+            args.scan_result,
+            args.output,
+            declared_manufacturer=args.manufacturer,
+            declared_model=args.model,
+        )
+    except SystemIdentityError as exc:
+        print(f"error: cannot create system identity: {exc}", file=sys.stderr)
+        return 2
+
+    print("eBUS Evidence system identity")
+    declared = document.get("declared_product", {})
+    if declared:
+        manufacturer = declared.get("manufacturer", "")
+        model = declared.get("model", "")
+        label = " ".join(part for part in (manufacturer, model) if part)
+        print(f"Declared product: {label}")
+    else:
+        print("Declared product: not supplied")
+    print(f"Observed devices: {len(document['devices'])}")
+    for device in document["devices"]:
+        print(
+            "  "
+            f"{device['address']} | {device['manufacturer']} | {device['id'] or '<empty>'} | "
+            f"SW {device['sw'] or '<empty>'} | HW {device['hw'] or '<empty>'}"
+        )
+    print(f"Topology SHA256: {document['topology_signature_sha256']}")
+    print(f"Output: {args.output}")
+    print("Only address/manufacturer/id/SW/HW are retained from scan results.")
+    print("No scan was initiated.")
+    return 0
+
+
 def _bundle(args: argparse.Namespace) -> int:
     try:
         profile = load_profile(args.profile)
@@ -531,6 +568,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_time_arguments(watch)
     watch.set_defaults(func=_watch)
+
+    system = subparsers.add_parser(
+        "system",
+        help="create a privacy-minimized system identity from existing ebusctl scan result output",
+    )
+    system.add_argument(
+        "--scan-result",
+        required=True,
+        help="text file containing existing ebusctl scan result output; no scan is initiated",
+    )
+    system.add_argument(
+        "--manufacturer",
+        help="optional user-declared product manufacturer, e.g. Vaillant",
+    )
+    system.add_argument(
+        "--model",
+        help="optional user-declared product model, e.g. 105/6 A",
+    )
+    system.add_argument(
+        "--output",
+        required=True,
+        help="output system identity JSON path",
+    )
+    system.set_defaults(func=_system)
 
     bundle = subparsers.add_parser(
         "bundle",
