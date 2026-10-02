@@ -317,9 +317,15 @@ def _rollover_state(
     state: dict[str, Any],
     profile: dict[str, Any],
 ) -> dict[str, Any]:
-    ended_at = _utc_now()
+    # The rollover boundary is the last persisted update of the completed
+    # observation, not the wall clock at which a newer tool happens to read it.
+    # This makes read-only rollover previews deterministic and accurately ties
+    # the historical epoch to the evidence state that was actually observed.
+    ended_at = str(state["updated_at"])
     archived = _archive_active_epoch(state, ended_at=ended_at)
     replacement = new_state(profile)
+    replacement["created_at"] = ended_at
+    replacement["updated_at"] = ended_at
     replacement["epochs"] = deepcopy(state.get("epochs", [])) + [archived]
     replacement["checkpoint"] = deepcopy(state.get("checkpoint"))
     replacement["continuity"] = deepcopy(
