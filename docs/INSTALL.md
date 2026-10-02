@@ -336,7 +336,11 @@ The import:
 - uses the same evidence profile and parser as live collection;
 - creates the normal `data/evidence-state.json` used by export;
 - refuses to mix with an existing evidence state;
-- aborts if the source file changes while it is being imported.
+- aborts if the source file changes while it is being imported;
+- stages state/context output privately and publishes the state last as the
+  completion marker;
+- rolls context publication back if the final state publication fails, so a
+  failed import does not leave a context-only result behind.
 
 If a sibling `FILE.old` belongs to the same copied history:
 
