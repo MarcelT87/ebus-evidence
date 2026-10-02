@@ -100,3 +100,17 @@ def test_export_refuses_zero_frame_state(tmp_path, monkeypatch):
     assert main(["status", "--raw", str(raw)]) == 0
     assert main(["export"]) == 2
     assert not (tmp_path / "data" / "evidence.zip").exists()
+
+
+def test_beginner_hints_use_local_launcher(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "ebusd.raw"
+    raw.write_bytes(_record("2026-10-01 10:00:00.000"))
+
+    assert main(["collect", "--raw", str(raw), "--seconds", "0"]) == 0
+    out = capsys.readouterr().out
+    assert "Next:\n  ./evidence export" in out
+
+    assert main(["status", "--raw", str(raw)]) == 0
+    out = capsys.readouterr().out
+    assert "Next:\n  ./evidence collect" in out

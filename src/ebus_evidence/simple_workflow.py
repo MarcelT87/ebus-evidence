@@ -155,7 +155,7 @@ def collect(
     print(f"State saved: {state_file}")
     print()
     print("Next:")
-    print("  ebus-evidence export")
+    print("  ./evidence export")
     return 0
 
 
@@ -237,11 +237,11 @@ def status(
     if ready:
         print()
         print("Next:")
-        print("  ebus-evidence export")
+        print("  ./evidence export")
     else:
         print()
         print("Next:")
-        print("  ebus-evidence collect")
+        print("  ./evidence collect")
     return 0
 
 
