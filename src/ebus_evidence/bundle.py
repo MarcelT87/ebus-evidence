@@ -320,6 +320,7 @@ def create_bundle(
         "path": output_path,
         "members": [name for name, _ in members],
         "manifest": manifest,
+        "state_summary": state_summary,
         "system_identity": system_identity,
         "sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
     }
@@ -482,6 +483,7 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
             except SystemIdentityError as exc:
                 raise BundleError(f"invalid system.json: {exc}") from exc
 
+        state = None
         if state_present:
             state = _json_member(archive, "evidence/state.json")
             if not isinstance(state, dict) or state.get("format") != _SHARED_STATE_FORMAT:
@@ -605,6 +607,11 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         "profile": profile["name"],
         "profile_version": profile.get("version", 1),
         "state_included": state_present,
+        "observation": (
+            deepcopy(state.get("observation"))
+            if isinstance(state, dict) and isinstance(state.get("observation"), dict)
+            else None
+        ),
         "system_identity_included": system_present,
         "topology_signature_sha256": (
             system_identity["topology_signature_sha256"]
