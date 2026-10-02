@@ -145,17 +145,39 @@ If small context `.raw` files are present, they contain actual eBUS payloads fro
 
 For the most conservative first exchange, use `--no-context-raw`.
 
-## 8. What to report with the bundle
+## 8. Identify the system
 
-Useful human-supplied installation context is intentionally kept separate from automatic collection.
+For hardware/firmware comparison, prefer the structured [System identity](SYSTEM_IDENTITY.md) workflow when an existing `ebusctl scan result` is available.
 
-Please report only what you are comfortable sharing, for example:
+Example:
+
+```bash
+ebus-evidence system \
+  --scan-result scan-result.txt \
+  --manufacturer Vaillant \
+  --model "105/6 A" \
+  --output system.json
+```
+
+This does not start a scan. It keeps only address/manufacturer/device ID/SW/HW and ignores additional scan columns.
+
+Include it in the bundle with:
+
+```bash
+ebus-evidence bundle \
+  --profile hw5103-open-evidence \
+  --state data/evidence-state.json \
+  --system system.json \
+  --output evidence.zip
+```
+
+If no existing scan result is available, do not trigger a new scan merely for this project. Report only the installation details you already know.
+
+Useful additional human-supplied context:
 
 ```text
 heat-pump / boiler family:
 controller:
-known module addresses:
-device HW/SW versions if already known:
 ebusd version:
 configuration source/version:
 whether raw timestamps are UTC or local time:
