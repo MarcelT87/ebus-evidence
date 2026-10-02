@@ -86,13 +86,26 @@ A later run of:
 
 resumes from the saved checkpoint when continuity can be proven.
 
-For a manual raw-log path:
+For a manual **growing/live** raw-log path:
 
 ```bash
 ./evidence collect --raw /path/to/ebusd.raw
 ```
 
-Check progress:
+If another user can only provide a completed/static copy of an existing
+message-mode raw log, use the equally shareable offline contribution path:
+
+```bash
+./evidence doctor --raw /path/to/ebusd.raw --profile hw5103-open-evidence
+./evidence import --raw /path/to/ebusd.raw
+./evidence status --raw /path/to/ebusd.raw
+./evidence export
+```
+
+`import` reads the copied source from beginning to end, does not modify it and
+refuses to mix it with an existing evidence state.
+
+Check progress/status:
 
 ```bash
 ./evidence status
@@ -100,8 +113,9 @@ Check progress:
 
 Important:
 
-> `analyze` is optional historical inspection. It does not create the
-> persistent evidence state used by the normal ZIP workflow.
+> `analyze` is optional historical inspection only. It does not create the
+> persistent evidence state used by either `collect -> export` or
+> `import -> export`.
 
 ## 4. Optional: identify the system
 
@@ -198,8 +212,8 @@ For known UTC source timestamps:
   --display-timezone Europe/Berlin
 ```
 
-This is useful research output, but it is separate from the normal
-`collect -> export` contribution path.
+This is useful research output, but it is separate from the normal exportable
+`collect -> export` and `import -> export` contribution paths.
 
 ## 8. Observation scope
 
