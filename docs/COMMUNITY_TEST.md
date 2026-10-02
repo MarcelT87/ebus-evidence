@@ -168,7 +168,28 @@ Ready to share.
 
 Raw context payloads are excluded by default.
 
-## 6. Privacy review
+## 6. Submit the verified bundle
+
+For normal community contribution, submit:
+
+```text
+data/evidence.zip
+```
+
+Open a GitHub issue using the **Evidence submission** template, attach the ZIP
+and paste the output of:
+
+```bash
+./evidence verify data/evidence.zip
+```
+
+Do not attach the complete `ebusd.raw` file.
+
+The repository is public, so an attached evidence ZIP should be treated as
+publicly shared data. See [Submit evidence](SUBMIT_EVIDENCE.md) for the exact
+privacy and submission checklist.
+
+## 7. Privacy review
 
 The normal bundle exporter does not add:
 
@@ -194,7 +215,7 @@ Raw context is included only after an explicit request:
 
 Review raw context before posting it publicly.
 
-## 7. Optional offline analysis
+## 8. Optional offline analysis
 
 To inspect historical raw-log content without creating persistent collection
 state:
@@ -215,7 +236,7 @@ For known UTC source timestamps:
 This is useful research output, but it is separate from the normal exportable
 `collect -> export` and `import -> export` contribution paths.
 
-## 8. Observation scope
+## 9. Observation scope
 
 Persistent collection records:
 
@@ -232,7 +253,7 @@ last_frame_timestamp
 This matters especially for negative evidence. A value not seen during a short
 test is different from a value not seen across a multi-day observation.
 
-## 9. What we compare
+## 10. What we compare
 
 The primary cross-installation questions remain factual:
 
