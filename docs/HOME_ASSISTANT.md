@@ -2,6 +2,8 @@
 
 This guide is for users who run ebusd together with Home Assistant.
 
+> **Current research scope:** the bundled `hw5103-open-evidence` profile is currently aimed at Vaillant-family systems. Home Assistant only changes the installation path; it does not make the current evidence profile manufacturer-independent.
+
 The first question is **which Home Assistant installation you have**.
 
 Home Assistant currently recommends two main installation types:
