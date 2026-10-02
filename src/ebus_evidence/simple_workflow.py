@@ -288,10 +288,10 @@ def export(
         if state_arg is not None:
             print(
                 "hint: the state exists but contains 0 observed frames; "
-                "run 'ebus-evidence collect' while the raw log is growing"
+                "run './evidence collect' while the raw log is growing"
             )
         else:
-            print("hint: run 'ebus-evidence collect' first")
+            print("hint: run './evidence collect' first")
         return 2
 
     output.parent.mkdir(parents=True, exist_ok=True)
