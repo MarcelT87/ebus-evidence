@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,8 @@ class ImportStats:
     context_triggers: int = 0
     context_captures: int = 0
     source_files: int = 0
+    non_frame_kinds: Counter[str] = field(default_factory=Counter)
+    skip_reasons: Counter[str] = field(default_factory=Counter)
 
 
 def _fingerprint(path: Path) -> tuple[int, int, int, int]:
@@ -56,12 +59,14 @@ def import_sources(
             context_manager.observe(record)
             try:
                 frame = parse_record(record)
-            except RawNonFrame:
+            except RawNonFrame as exc:
                 stats.non_frames += 1
+                stats.non_frame_kinds[exc.kind] += 1
                 store.observe_non_frame(save=False)
                 continue
-            except RawParseError:
+            except RawParseError as exc:
                 stats.skipped += 1
+                stats.skip_reasons[str(exc)] += 1
                 store.observe_skip(save=False)
                 continue
 
