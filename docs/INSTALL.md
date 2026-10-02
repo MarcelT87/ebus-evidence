@@ -37,7 +37,8 @@ Use the dedicated path:
 **[Home Assistant](HOME_ASSISTANT.md)**
 
 The current recommended workflow is to let the eBUSd App write the message-mode
-raw log, then analyze that file on a normal computer.
+raw log, copy that file to a normal computer, then import it into an exportable
+evidence state.
 
 ### B. ebusd in Docker on a Linux host
 
@@ -54,8 +55,9 @@ Continue below.
 
 ### D. ebusd runs on another computer
 
-Install `ebus-evidence` on a normal computer and analyze a copied or read-only
-mounted raw-log file.
+Install `ebus-evidence` on a normal computer. Import a completed/static copied
+raw log, or use `collect` against a read-only mounted raw log that continues to
+grow.
 
 ### E. I do not know where ebusd runs
 
@@ -425,8 +427,8 @@ or:
 
 Important:
 
-> `analyze` does **not** create the persistent evidence state used by
-> `collect -> export`.
+> `analyze` does **not** create the persistent evidence state used by either
+> `collect -> export` or `import -> export`.
 
 This keeps offline analysis separate from persistent evidence collection.
 
