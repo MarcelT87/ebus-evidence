@@ -2,6 +2,8 @@
 
 This is the minimal test flow for another ebusd user who wants to contribute comparable passive evidence.
 
+> **Current target group:** this first community workflow is aimed at **Vaillant-family eBUS installations**. The bundled `hw5103-open-evidence` profile contains Vaillant-specific identities from the current research. Users of other manufacturers are welcome to test basic raw-log compatibility, but should not expect this profile to provide meaningful device coverage yet.
+
 The goal is not to change the heating system or probe unknown registers. The tool consumes an already configured ebusd message-mode raw log.
 
 ## Safety boundary
