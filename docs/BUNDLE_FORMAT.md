@@ -321,6 +321,11 @@ On a local profile-version rollover, the raw-log checkpoint remains local and is
 preserved for resume, but it is never exported. The active epoch starts at zero
 frames and continues from that checkpoint without replaying earlier traffic.
 
+Bundle creation may also preview a forward rollover entirely in memory when the
+local state still belongs to the immediately older profile version. This
+read-only preview produces the same historical/current epoch separation without
+modifying the local state; a later collector/watch writer persists the rollover.
+
 `profile_fingerprint` hashes profile behavior while ignoring presentation-only
 descriptions. Current local state uses it to reject silent semantic changes
 without a profile-version bump. Historical legacy epochs may have a null
