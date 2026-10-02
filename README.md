@@ -36,15 +36,29 @@ message-mode raw log.
 
 ### 1. Install
 
+Choose any directory where your user can write. The home directory below is
+only a simple example; `ebus-evidence` does not need to live next to ebusd,
+Docker or under a specific system path.
+
 ```bash
-cd ~
+cd ~   # example only
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
 bash install.sh
 ```
 
+You can also clone directly to another writable location, for example:
+
+```bash
+git clone https://github.com/MarcelT87/ebus-evidence.git /path/to/ebus-evidence
+cd /path/to/ebus-evidence
+bash install.sh
+```
+
 The installer creates a local `.venv`, installs the checkout and enables the
-local `./evidence` launcher. It does not configure or access the eBUS adapter.
+local `./evidence` launcher. Runtime data such as `data/evidence-state.json`
+and `data/evidence.zip` are kept relative to that checkout. It does not
+configure or access the eBUS adapter.
 
 ### 2. Check
 
