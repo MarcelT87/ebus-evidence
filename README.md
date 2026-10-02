@@ -87,6 +87,21 @@ Check progress at any time with:
 ./evidence status
 ```
 
+### Existing/static raw-log file
+
+If you already have a **static copy** of an ebusd message-mode raw log, do not
+use live collection just to replay history. Import the existing file from
+beginning to end:
+
+```bash
+./evidence doctor --raw /path/to/ebusd.raw --profile hw5103-open-evidence
+./evidence import --raw /path/to/ebusd.raw
+./evidence export
+```
+
+`import` is read-only, does not require ebusd to be running locally and refuses
+to mix the imported history with an existing evidence state.
+
 ### 4. Export a verified ZIP
 
 ```bash
@@ -129,6 +144,7 @@ The explicit expert interface remains available:
 
 ```text
 ebus-evidence doctor
+ebus-evidence import
 ebus-evidence analyze
 ebus-evidence watch
 ebus-evidence system
