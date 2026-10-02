@@ -292,7 +292,11 @@ def create_bundle(
         if not state_file.is_file():
             raise BundleError(f"evidence state not found: {state_file}")
         try:
-            state = load_state(state_file, profile)
+            state = load_state(
+                state_file,
+                profile,
+                allow_profile_rollover=True,
+            )
         except (OSError, ValueError) as exc:
             raise BundleError(f"cannot load evidence state: {exc}") from exc
         state_summary = shared_state(state)
