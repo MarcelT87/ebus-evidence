@@ -142,7 +142,10 @@ def parse_record(record: bytes | str) -> Frame:
     request_length = master[4]
     request_end = 5 + request_length
     if request_end > len(master):
-        raise RawParseError("request length exceeds telegram length")
+        raise RawNonFrame(
+            "truncated_request",
+            "declared request length exceeds available telegram bytes",
+        )
 
     source = f"{master[0]:02x}"
     target = f"{master[1]:02x}"

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import tempfile
 
 from ebus_evidence.bundle import BundleError, create_bundle, verify_bundle
 from ebus_evidence.discovery.ebusd import discover_ebusd
+from ebus_evidence.importer import StaticImportError, import_sources
+from ebus_evidence.input.raw_file import resolve_raw_sources
 from ebus_evidence.profiles.loader import ProfileError, load_profile
 from ebus_evidence.state import EvidenceStateStore, StateError
 from ebus_evidence.system_identity import SystemIdentityError, load_system_document
@@ -159,6 +163,138 @@ def collect(
     return 0
 
 
+
+def import_raw(
+    *,
+    raw_path: str,
+    profile_name: str = DEFAULT_PROFILE,
+    state_path: str = DEFAULT_STATE,
+    context_dir: str = DEFAULT_CONTEXT_DIR,
+    include_rotated: bool = False,
+    source_timezone: str | None = None,
+    display_timezone: str | None = None,
+) -> int:
+    try:
+        _validate_timezones(source_timezone, display_timezone)
+        profile = load_profile(profile_name)
+    except (TimezoneError, ProfileError) as exc:
+        print(f"error: {exc}")
+        return 2
+
+    raw_file = Path(raw_path)
+    if not raw_file.is_file():
+        print(f"error: raw file not found: {raw_file}")
+        return 2
+
+    sources = resolve_raw_sources(raw_file, include_rotated=include_rotated)
+    state_file = Path(state_path)
+    contexts = Path(context_dir)
+
+    if state_file.exists():
+        print(f"error: existing evidence state found: {state_file}")
+        print(
+            "hint: static import requires a fresh state so observation histories "
+            "are not mixed; archive the old state or choose --state NEWFILE"
+        )
+        return 2
+
+    if contexts.exists():
+        if not contexts.is_dir():
+            print(f"error: context path is not a directory: {contexts}")
+            return 2
+        if any(contexts.iterdir()):
+            print(f"error: existing context files found: {contexts}")
+            print(
+                "hint: static import requires an empty context destination so "
+                "observation histories are not mixed"
+            )
+            return 2
+
+    source_paths = {source.resolve() for source in sources}
+    if state_file.resolve() in source_paths:
+        print("error: evidence state path must not overwrite a raw source")
+        return 2
+
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    contexts.parent.mkdir(parents=True, exist_ok=True)
+
+    state_tmp_root = Path(
+        tempfile.mkdtemp(prefix=".evidence-import-state-", dir=state_file.parent)
+    )
+    context_tmp_root = Path(
+        tempfile.mkdtemp(prefix=".evidence-import-context-", dir=contexts.parent)
+    )
+    temp_state = state_tmp_root / "state.json"
+    temp_contexts = context_tmp_root / "contexts"
+
+    print("eBUS Evidence static import")
+    print()
+    print(f"Raw log ............. {raw_file} (read-only)")
+    if include_rotated:
+        print(f"Source files ........ {len(sources)}")
+    print(f"Profile ............. {profile['name']} (v{profile.get('version', 1)})")
+    print(f"Evidence state ...... {state_file}")
+    print(f"Contexts ............ {contexts}")
+    print()
+    print("Mode: offline / read-only / from beginning to end")
+    print("The source file must remain unchanged during import.")
+    print()
+
+    try:
+        store = EvidenceStateStore.open(temp_state, profile)
+        stats = import_sources(
+            sources,
+            profile,
+            store,
+            context_dir=temp_contexts,
+            source_timezone=source_timezone,
+            display_timezone=display_timezone,
+        )
+        if stats.frames == 0:
+            print("error: no complete eBUS frames were found; import was not published")
+            return 2
+
+        store.save()
+
+        if contexts.exists():
+            contexts.rmdir()
+        if temp_contexts.exists():
+            temp_contexts.replace(contexts)
+        else:
+            contexts.mkdir(parents=True, exist_ok=True)
+
+        temp_state.replace(state_file)
+    except (OSError, StateError, StaticImportError) as exc:
+        print(f"error: static import failed: {exc}")
+        return 2
+    finally:
+        shutil.rmtree(state_tmp_root, ignore_errors=True)
+        shutil.rmtree(context_tmp_root, ignore_errors=True)
+
+    print("Import complete.")
+    print()
+    print(f"Source files ......... {stats.source_files}")
+    print(f"Frames observed ...... {stats.frames}")
+    print(f"Evidence events ....... {stats.matches}")
+    print(f"Contexts captured ..... {stats.context_captures}")
+    print(f"Non-frames ............ {stats.non_frames}")
+    print(f"Skipped ............... {stats.skipped}")
+    if stats.non_frame_kinds:
+        print("Non-frame kinds:")
+        for kind, count in stats.non_frame_kinds.most_common():
+            print(f"  {count:>8}  {kind}")
+    if stats.skip_reasons:
+        print("Skip reasons:")
+        for reason, count in stats.skip_reasons.most_common():
+            print(f"  {count:>8}  {reason}")
+    print()
+    print(f"State saved: {state_file}")
+    print()
+    print("Next:")
+    print("  ./evidence export")
+    return 0
+
+
 def status(
     *,
     raw_path: str | None = None,
@@ -288,10 +424,14 @@ def export(
         if state_arg is not None:
             print(
                 "hint: the state exists but contains 0 observed frames; "
-                "run './evidence collect' while the raw log is growing"
+                "use './evidence collect' for a growing raw log, or import a "
+                "static copy into a fresh state with './evidence import --raw FILE'"
             )
         else:
-            print("hint: run './evidence collect' first")
+            print(
+                "hint: run './evidence collect' for a growing raw log, or "
+                "'./evidence import --raw FILE' for a static copy"
+            )
         return 2
 
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -203,3 +203,33 @@ def test_final_tail_record_can_complete_watch_context_window(tmp_path, monkeypat
     assert metadata["check_id"] == "hmu_ba08_variants"
     assert metadata["post_window_complete"] is True
     assert metadata["record_count"] == 5
+
+
+def test_pre_window_complete_uses_observation_start_not_exact_boundary_record(tmp_path):
+    manager = ContextCaptureManager(tmp_path, _profile())
+
+    manager.observe(_record("2026-10-01 10:00:00.250"))
+    manager.observe(_record("2026-10-01 10:00:01.500"))
+    manager.observe(_record("2026-10-01 10:00:02.750"))
+    manager.observe(_record("2026-10-01 10:00:03.500"))
+
+    assert manager.trigger_event(
+        _event("2026-10-01 10:00:03.500", 32)
+    ) is True
+    manager.finish()
+
+    metadata = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
+    assert metadata["pre_window_complete"] is True
+
+
+def test_pre_window_incomplete_when_collection_started_too_late(tmp_path):
+    manager = ContextCaptureManager(tmp_path, _profile())
+
+    manager.observe(_record("2026-10-01 10:00:02.500"))
+    assert manager.trigger_event(
+        _event("2026-10-01 10:00:03.000", 32)
+    ) is True
+    manager.finish()
+
+    metadata = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
+    assert metadata["pre_window_complete"] is False

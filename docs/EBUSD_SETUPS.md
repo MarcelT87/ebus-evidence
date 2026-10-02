@@ -121,7 +121,20 @@ Do not use byte mode:
 --lograwdata=bytes
 ```
 
-After restarting your existing ebusd service, check:
+Before changing anything, you can inspect how the existing service is started:
+
+```bash
+systemctl show -p ExecStart ebusd
+systemctl cat ebusd
+```
+
+Look for existing `--lograwdata`, `--lograwdatafile=...` and
+`--lograwdatasize=...` arguments. The actual file path is whatever is set by
+`--lograwdatafile`; `/var/log/ebusd.raw` is only the common example used
+below.
+
+After restarting your existing ebusd service, check the configured file, for
+example:
 
 ```bash
 ls -lh /var/log/ebusd.raw*
@@ -153,7 +166,14 @@ The current simple approaches are:
 1. copy the message-mode raw log to the analysis computer; or
 2. make the raw-log directory available through a secure read-only filesystem mount.
 
-Then use the file explicitly:
+For a static/copied file that should become exportable evidence:
+
+```bash
+./evidence import --raw /path/to/ebusd.raw
+./evidence export
+```
+
+For inspection only:
 
 ```bash
 ./evidence analyze \
@@ -224,7 +244,8 @@ enable or locate message-mode raw log
 ./evidence doctor
      ↓
 growing/live raw log -> ./evidence collect
-static copied raw log -> ./evidence analyze --raw FILE
+static copied raw log -> ./evidence import --raw FILE
+inspection only       -> ./evidence analyze --raw FILE
 ```
 
 That is the intended integration point.

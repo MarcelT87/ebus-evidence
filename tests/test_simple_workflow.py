@@ -1,5 +1,7 @@
 import json
 
+import ebus_evidence.importer as importer_module
+
 from ebus_evidence.bundle import verify_bundle
 from ebus_evidence.cli import main
 from ebus_evidence.state import EvidenceStateStore
@@ -87,7 +89,8 @@ def test_export_requires_collected_evidence(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["export"]) == 2
     out = capsys.readouterr().out
-    assert "hint: run './evidence collect' first" in out
+    assert "./evidence collect" in out
+    assert "./evidence import --raw FILE" in out
     assert not (tmp_path / "data" / "evidence.zip").exists()
 
 
@@ -103,7 +106,8 @@ def test_export_refuses_zero_frame_state(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
     assert main(["export"]) == 2
     out = capsys.readouterr().out
-    assert "run './evidence collect' while the raw log is growing" in out
+    assert "./evidence collect" in out
+    assert "./evidence import --raw FILE" in out
     assert not (tmp_path / "data" / "evidence.zip").exists()
 
 
@@ -119,3 +123,127 @@ def test_beginner_hints_use_local_launcher(tmp_path, monkeypatch, capsys):
     assert main(["status", "--raw", str(raw)]) == 0
     out = capsys.readouterr().out
     assert "Next:\n  ./evidence collect" in out
+
+
+def test_static_import_builds_exportable_state_and_preserves_source(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied-ebusd.raw"
+    original = (
+        _record("2026-10-01 10:00:00.000")
+        + _matching_record("2026-10-01 10:00:01.000")
+    )
+    raw.write_bytes(original)
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    assert raw.read_bytes() == original
+
+    profile = load_profile("hw5103-open-evidence")
+    state_path = tmp_path / "data" / "evidence-state.json"
+    state = EvidenceStateStore.open(state_path, profile)
+    assert state.state["observation"]["frames_seen"] == 2
+    assert state.total_events == 1
+    assert state.checkpoint is None
+
+    assert main(["export"]) == 0
+    verified = verify_bundle(tmp_path / "data" / "evidence.zip")
+    assert verified["valid"] is True
+    assert verified["state_included"] is True
+    assert verified["observation"]["frames_seen"] == 2
+    assert verified["context_raw_count"] == 0
+
+
+def test_static_import_refuses_to_mix_with_existing_state(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied-ebusd.raw"
+    raw.write_bytes(_matching_record("2026-10-01 10:00:01.000"))
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    capsys.readouterr()
+
+    state_path = tmp_path / "data" / "evidence-state.json"
+    before = state_path.read_bytes()
+
+    assert main(["import", "--raw", str(raw)]) == 2
+    out = capsys.readouterr().out
+    assert "existing evidence state found" in out
+    assert "observation histories are not mixed" in out
+    assert state_path.read_bytes() == before
+
+
+def test_static_import_can_include_rotated_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "ebusd.raw"
+    rotated = tmp_path / "ebusd.raw.old"
+    rotated.write_bytes(_record("2026-10-01 09:59:59.000"))
+    raw.write_bytes(_matching_record("2026-10-01 10:00:01.000"))
+
+    assert main(
+        ["import", "--raw", str(raw), "--include-rotated"]
+    ) == 0
+
+    profile = load_profile("hw5103-open-evidence")
+    state = EvidenceStateStore.open(
+        tmp_path / "data" / "evidence-state.json",
+        profile,
+    )
+    observation = state.state["observation"]
+    assert observation["frames_seen"] == 2
+    assert observation["first_frame_timestamp"]["raw"] == "2026-10-01 09:59:59.000"
+    assert observation["last_frame_timestamp"]["raw"] == "2026-10-01 10:00:01.000"
+
+
+def test_static_import_aborts_if_source_changes_without_publishing_state(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "changing-ebusd.raw"
+    raw.write_bytes(_matching_record("2026-10-01 10:00:01.000"))
+
+    fingerprints = iter(
+        [
+            (1, 2, 100, 10),
+            (1, 2, 101, 11),
+        ]
+    )
+    monkeypatch.setattr(
+        importer_module,
+        "_fingerprint",
+        lambda _path: next(fingerprints),
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 2
+    out = capsys.readouterr().out
+    assert "raw source changed during import" in out
+    assert not (tmp_path / "data" / "evidence-state.json").exists()
+    assert not (tmp_path / "data" / "contexts").exists()
+
+
+def test_static_import_reports_truncated_requests_as_non_frames(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied-ebusd.raw"
+    raw.write_bytes(
+        _record("2026-10-01 10:00:00.000")
+        + b"2026-10-01 10:00:01.000 >3115b55503a400\n"
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    out = capsys.readouterr().out
+
+    assert "Non-frames ............ 1" in out
+    assert "Skipped ............... 0" in out
+    assert "truncated_request" in out
+
+    profile = load_profile("hw5103-open-evidence")
+    state = EvidenceStateStore.open(
+        tmp_path / "data" / "evidence-state.json",
+        profile,
+    )
+    assert state.state["observation"]["frames_seen"] == 1
+    assert state.state["observation"]["non_frames"] == 1
+    assert state.state["observation"]["skipped"] == 0

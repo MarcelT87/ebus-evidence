@@ -865,6 +865,69 @@ Review all output before posting it publicly.
 
 ---
 
+# 34. `import` says an evidence state already exists
+
+Example:
+
+```text
+error: existing evidence state found: data/evidence-state.json
+```
+
+This is deliberate. Static import does not silently combine a copied historical
+file with an existing live/imported observation history.
+
+Use a fresh checkout/state location, archive the previous local `data/`
+directory, or choose an explicit fresh `--state` and empty `--context-dir`.
+
+Do not delete evidence you still need merely to make the command continue.
+
+---
+
+# 35. `import` says the raw source changed during import
+
+A static import requires the source file to remain unchanged from beginning to
+end. This error usually means the supplied path points at the **live ebusd raw
+log**, which continued to grow during processing.
+
+For a live/growing file use:
+
+```bash
+./evidence collect --raw /path/to/live/ebusd.raw
+```
+
+For historical import, first make a stable copy and import the copy:
+
+```bash
+cp /path/to/live/ebusd.raw /tmp/ebusd-copy.raw
+./evidence import --raw /tmp/ebusd-copy.raw
+```
+
+The import never modifies the source itself.
+
+---
+
+# 36. `import` reports non-frames such as `short_fragment` or `truncated_request`
+
+The importer distinguishes complete parsed frames from incomplete/non-frame raw
+records.
+
+Examples include:
+
+- `short_fragment` — too few bus bytes to form a complete frame;
+- `truncated_request` — the telegram declares more request bytes than are
+  actually present.
+
+These are counted explicitly as non-frames rather than silently treated as
+valid evidence frames.
+
+A small number can occur naturally in real long-running raw logs. A successful
+import should still show `Skipped = 0` unless an actually unsupported/malformed
+record type is encountered.
+
+Do not edit the source raw log merely to remove these records.
+
+---
+
 # Related documentation
 
 - [Installation and first run](INSTALL.md)
