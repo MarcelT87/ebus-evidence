@@ -121,7 +121,20 @@ Do not use byte mode:
 --lograwdata=bytes
 ```
 
-After restarting your existing ebusd service, check:
+Before changing anything, you can inspect how the existing service is started:
+
+```bash
+systemctl show -p ExecStart ebusd
+systemctl cat ebusd
+```
+
+Look for existing `--lograwdata`, `--lograwdatafile=...` and
+`--lograwdatasize=...` arguments. The actual file path is whatever is set by
+`--lograwdatafile`; `/var/log/ebusd.raw` is only the common example used
+below.
+
+After restarting your existing ebusd service, check the configured file, for
+example:
 
 ```bash
 ls -lh /var/log/ebusd.raw*
