@@ -11,7 +11,7 @@ import yaml
 
 from ebus_evidence import __version__
 from ebus_evidence.profiles.loader import ProfileError, validate_profile_data
-from ebus_evidence.provenance import bundle_provenance
+from ebus_evidence.provenance import ProvenanceError, bundle_provenance
 from ebus_evidence.state import load_state
 from ebus_evidence.system_identity import (
     SystemIdentityError,
@@ -277,12 +277,17 @@ def create_bundle(
     if state_summary is None and context_metadata_count == 0:
         raise BundleError("no evidence found in the requested bundle inputs")
 
+    try:
+        provenance = bundle_provenance(profile_bytes=profile_bytes)
+    except ProvenanceError as exc:
+        raise BundleError(f"cannot determine bundle provenance: {exc}") from exc
+
     manifest = {
         "format": _BUNDLE_FORMAT,
         "tool_version": __version__,
         "profile": profile["name"],
         "profile_version": profile.get("version", 1),
-        "provenance": bundle_provenance(profile_bytes=profile_bytes),
+        "provenance": provenance,
         "evidence_state_included": state_summary is not None,
         "system_identity_included": system_identity is not None,
         "context_metadata_count": context_metadata_count,
