@@ -598,23 +598,31 @@ This is intentionally different from a checksum failure.
 
 ---
 
-# 26. Bundle contains raw context files and you do not want to share them
+# 26. Does a bundle contain raw context files by default?
 
-Create a metadata-only bundle:
+No.
+
+Current bundles exclude context `.raw` files unless you explicitly request them.
+
+The normal public-sharing command is:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --no-context-raw \
-  --output evidence-metadata.zip
+  --output evidence.zip
 ```
 
-Then verify:
+If you deliberately need the reviewed raw context as well:
 
 ```bash
-ebus-evidence verify evidence-metadata.zip
+ebus-evidence bundle \
+  --profile hw5103-open-evidence \
+  --state data/evidence-state.json \
+  --context-dir data/contexts \
+  --include-context-raw \
+  --output evidence-with-context-raw.zip
 ```
 
 Raw context payloads can contain device-specific bus data. Review them before public sharing.
