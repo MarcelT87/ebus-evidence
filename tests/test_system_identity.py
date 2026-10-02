@@ -80,7 +80,7 @@ def test_declared_product_does_not_change_topology_signature():
     a = build_system_document(
         devices,
         declared_manufacturer="Vaillant",
-        declared_model="105/6 A",
+        declared_model="TEST-MODEL",
     )
     b = build_system_document(
         devices,
@@ -89,7 +89,7 @@ def test_declared_product_does_not_change_topology_signature():
     )
 
     assert a["topology_signature_sha256"] == b["topology_signature_sha256"]
-    assert a["declared_product"]["model"] == "105/6 A"
+    assert a["declared_product"]["model"] == "TEST-MODEL"
     assert a["source"]["extra_scan_columns_retained"] is False
 
 
@@ -116,7 +116,7 @@ def test_system_document_rejects_extra_declared_product_fields():
     document = build_system_document(
         devices,
         declared_manufacturer="Vaillant",
-        declared_model="105/6 A",
+        declared_model="TEST-MODEL",
     )
     document["declared_product"]["serial"] = "private"
 
