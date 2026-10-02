@@ -10,6 +10,10 @@ _RUNTIME_HASH_ALGORITHM = "ebus-evidence-runtime-sha256-v1"
 _RUNTIME_SUFFIXES = {".py", ".yaml", ".yml"}
 
 
+class ProvenanceError(RuntimeError):
+    pass
+
+
 def _package_root() -> Path:
     return Path(__file__).resolve().parent
 
@@ -22,24 +26,27 @@ def tool_runtime_sha256(package_root: str | Path | None = None) -> str:
     digest = hashlib.sha256()
     digest.update((_RUNTIME_HASH_ALGORITHM + "\0").encode("ascii"))
 
-    files = sorted(
-        (
-            path
-            for path in root.rglob("*")
-            if path.is_file() and path.suffix.lower() in _RUNTIME_SUFFIXES
-        ),
-        key=lambda path: path.relative_to(root).as_posix(),
-    )
+    try:
+        files = sorted(
+            (
+                path
+                for path in root.rglob("*")
+                if path.is_file() and path.suffix.lower() in _RUNTIME_SUFFIXES
+            ),
+            key=lambda path: path.relative_to(root).as_posix(),
+        )
 
-    for path in files:
-        relative = path.relative_to(root).as_posix().encode("utf-8")
-        data = path.read_bytes()
-        digest.update(relative)
-        digest.update(b"\0")
-        digest.update(str(len(data)).encode("ascii"))
-        digest.update(b"\0")
-        digest.update(data)
-        digest.update(b"\0")
+        for path in files:
+            relative = path.relative_to(root).as_posix().encode("utf-8")
+            data = path.read_bytes()
+            digest.update(relative)
+            digest.update(b"\0")
+            digest.update(str(len(data)).encode("ascii"))
+            digest.update(b"\0")
+            digest.update(data)
+            digest.update(b"\0")
+    except OSError as exc:
+        raise ProvenanceError(f"cannot fingerprint runtime package: {exc}") from exc
 
     return digest.hexdigest()
 
