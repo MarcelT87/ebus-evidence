@@ -223,7 +223,8 @@ enable or locate message-mode raw log
      ↓
 ./evidence doctor
      ↓
-ebus-evidence analyze
+growing/live raw log -> ./evidence collect
+static copied raw log -> ./evidence analyze --raw FILE
 ```
 
 That is the intended integration point.
