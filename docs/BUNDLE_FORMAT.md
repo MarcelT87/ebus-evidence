@@ -322,9 +322,15 @@ preserved for resume, but it is never exported. The active epoch starts at zero
 frames and continues from that checkpoint without replaying earlier traffic.
 
 Bundle creation may also preview a forward rollover entirely in memory when the
-local state still belongs to the immediately older profile version. This
-read-only preview produces the same historical/current epoch separation without
-modifying the local state; a later collector/watch writer persists the rollover.
+local state still belongs to an older profile version. This read-only preview
+produces the same historical/current epoch separation without modifying the
+local state; a later collector/watch writer persists the rollover.
+
+The rollover boundary timestamp is derived from the completed state's last
+persisted `updated_at`, not from the wall clock at export time. This keeps
+repeated read-only rollover previews deterministic. Coverage is determined by
+the epoch's observation counters/timestamps, not merely by `created_at` or
+`ended_at`.
 
 `profile_fingerprint` hashes profile behavior while ignoring presentation-only
 descriptions. Current local state uses it to reject silent semantic changes
