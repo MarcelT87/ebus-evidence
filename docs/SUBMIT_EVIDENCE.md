@@ -36,6 +36,8 @@ You can verify it again explicitly:
 
 Do not submit a bundle that reports `INVALID`.
 
+Paste the complete verifier output with the submission. Current bundles report runtime/profile provenance so maintainers can group evidence created by the same tool/profile bytes.
+
 ## 2. What to submit
 
 Submit exactly:
