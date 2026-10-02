@@ -382,6 +382,8 @@ ebus-evidence watch \
   --seconds 15
 ```
 
+`--seconds` limits how long the **watch process runs**. When a persistent state/checkpoint is reused after watch was stopped, the tool first resumes at the saved raw-log position and can process backlog that accumulated during the pause. A 60-second process run may therefore cover more than 60 seconds of raw-log timestamps. This preserves continuity instead of silently discarding bus history.
+
 Watch reads the raw-log file only. It does not generate bus traffic.
 
 ---
