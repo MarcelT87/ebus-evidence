@@ -10,9 +10,10 @@ from typing import Any
 import yaml
 
 from ebus_evidence import __version__
+from ebus_evidence.context import ContextError, context_metadata_scope
 from ebus_evidence.profiles.loader import ProfileError, validate_profile_data
 from ebus_evidence.provenance import ProvenanceError, bundle_provenance
-from ebus_evidence.state import load_state
+from ebus_evidence.state import load_state, profile_fingerprint
 from ebus_evidence.system_identity import (
     SystemIdentityError,
     load_system_document,
@@ -119,6 +120,56 @@ def _validate_shared_observation(value: Any) -> dict[str, Any]:
     return normalized
 
 
+def _validate_shared_epoch(
+    epoch: Any,
+    *,
+    profile_name: str,
+    active_version: int,
+    previous_version: int,
+    index: int,
+) -> int:
+    label = f"shared state epoch {index}"
+    if not isinstance(epoch, dict):
+        raise BundleError(f"{label} must be a mapping")
+    if epoch.get("profile") != profile_name:
+        raise BundleError(f"{label} profile mismatch")
+
+    version = epoch.get("profile_version")
+    if (
+        not isinstance(version, int)
+        or isinstance(version, bool)
+        or version < 1
+        or version >= active_version
+    ):
+        raise BundleError(
+            f"{label} profile_version must be a positive integer below active version"
+        )
+    if version <= previous_version:
+        raise BundleError("shared state epoch versions must be strictly increasing")
+
+    fingerprint = epoch.get("profile_fingerprint")
+    if fingerprint is not None and not _valid_sha256(fingerprint):
+        raise BundleError(f"{label} profile_fingerprint is invalid")
+
+    for key in ("created_at", "updated_at", "ended_at"):
+        value = epoch.get(key)
+        if not isinstance(value, str) or not value:
+            raise BundleError(f"{label} requires non-empty {key}")
+
+    total_events = epoch.get("total_events")
+    if (
+        not isinstance(total_events, int)
+        or isinstance(total_events, bool)
+        or total_events < 0
+    ):
+        raise BundleError(f"{label} total_events must be a non-negative integer")
+
+    _validate_shared_observation(epoch.get("observation"))
+    if not isinstance(epoch.get("checks"), dict):
+        raise BundleError(f"{label} checks must be a mapping")
+    return version
+
+
 def _safe_context_raw_name(value: Any) -> str:
     if not isinstance(value, str) or not value:
         raise BundleError("context raw_file must be a non-empty filename")
@@ -147,10 +198,12 @@ def shared_state(state: dict[str, Any]) -> dict[str, Any]:
         "format": _SHARED_STATE_FORMAT,
         "profile": state["profile"],
         "profile_version": state["profile_version"],
+        "profile_fingerprint": state.get("profile_fingerprint"),
         "created_at": state.get("created_at"),
         "updated_at": state.get("updated_at"),
         "total_events": int(state.get("total_events", 0)),
         "observation": deepcopy(state.get("observation")),
+        "epochs": deepcopy(state.get("epochs", [])),
         "continuity_reset_count": len(
             state.get("continuity", {}).get("resets", [])
             if isinstance(state.get("continuity"), dict)
@@ -165,34 +218,24 @@ def _load_contexts(
     profile: dict[str, Any],
     *,
     include_raw: bool,
-) -> list[tuple[str, bytes]]:
+) -> tuple[list[tuple[str, bytes]], int]:
     if context_dir is None:
-        return []
+        return [], 0
 
     directory = Path(context_dir)
-    if not directory.exists():
-        raise BundleError(f"context directory not found: {directory}")
-    if not directory.is_dir():
-        raise BundleError(f"context path is not a directory: {directory}")
+    try:
+        scope = context_metadata_scope(directory, profile)
+    except ContextError as exc:
+        raise BundleError(str(exc)) from exc
 
     members: list[tuple[str, bytes]] = []
-    for metadata_path in sorted(directory.glob("*.json"), key=lambda p: p.name):
+    for metadata_path in scope.current:
         try:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise BundleError(f"cannot read context metadata {metadata_path.name}: {exc}") from exc
-
-        if not isinstance(metadata, dict) or metadata.get("format") != "ebus-evidence-context-v1":
-            raise BundleError(f"unsupported context metadata: {metadata_path.name}")
-        if metadata.get("profile") != profile["name"]:
             raise BundleError(
-                f"context profile mismatch in {metadata_path.name}: "
-                f"{metadata.get('profile')!r} != {profile['name']!r}"
-            )
-        if metadata.get("profile_version") != profile.get("version", 1):
-            raise BundleError(
-                f"context profile version mismatch in {metadata_path.name}"
-            )
+                f"cannot read context metadata {metadata_path.name}: {exc}"
+            ) from exc
 
         try:
             raw_name = _safe_context_raw_name(metadata.get("raw_file"))
@@ -214,10 +257,12 @@ def _load_contexts(
             try:
                 raw_bytes = raw_path.read_bytes()
             except OSError as exc:
-                raise BundleError(f"cannot read context raw file {raw_name}: {exc}") from exc
+                raise BundleError(
+                    f"cannot read context raw file {raw_name}: {exc}"
+                ) from exc
             members.append((f"contexts/{raw_name}", raw_bytes))
 
-    return members
+    return members, len(scope.historical)
 
 
 def create_bundle(
@@ -257,7 +302,7 @@ def create_bundle(
             raise BundleError(f"cannot load system identity: {exc}") from exc
         members.append(("system.json", _canonical_json(system_identity)))
 
-    context_members = _load_contexts(
+    context_members, historical_context_metadata_count = _load_contexts(
         context_dir,
         profile,
         include_raw=include_context_raw,
@@ -339,6 +384,7 @@ def create_bundle(
         "manifest": manifest,
         "state_summary": state_summary,
         "system_identity": system_identity,
+        "historical_context_metadata_excluded": historical_context_metadata_count,
         "sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
     }
 
@@ -544,6 +590,29 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
                 raise BundleError("shared state/profile name mismatch")
             if state.get("profile_version") != profile.get("version", 1):
                 raise BundleError("shared state/profile version mismatch")
+
+            state_fingerprint = state.get("profile_fingerprint")
+            if state_fingerprint is not None:
+                if not _valid_sha256(state_fingerprint):
+                    raise BundleError("shared state profile_fingerprint is invalid")
+                if state_fingerprint != profile_fingerprint(profile):
+                    raise BundleError(
+                        "shared state profile_fingerprint does not match profile.yaml"
+                    )
+
+            epochs = state.get("epochs", [])
+            if not isinstance(epochs, list):
+                raise BundleError("shared state epochs must be a list")
+            previous_epoch_version = 0
+            for index, epoch in enumerate(epochs):
+                previous_epoch_version = _validate_shared_epoch(
+                    epoch,
+                    profile_name=profile["name"],
+                    active_version=profile.get("version", 1),
+                    previous_version=previous_epoch_version,
+                    index=index,
+                )
+
             if not isinstance(state.get("total_events"), int) or state["total_events"] < 0:
                 raise BundleError("shared state total_events must be a non-negative integer")
             if (
@@ -669,6 +738,21 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         "profile_version": profile.get("version", 1),
         "provenance": deepcopy(provenance) if isinstance(provenance, dict) else None,
         "state_included": state_present,
+        "historical_epoch_count": (
+            len(state.get("epochs", []))
+            if isinstance(state, dict) and isinstance(state.get("epochs", []), list)
+            else 0
+        ),
+        "historical_frames": (
+            sum(
+                int(epoch["observation"]["frames_seen"])
+                for epoch in state.get("epochs", [])
+                if isinstance(epoch, dict)
+                and isinstance(epoch.get("observation"), dict)
+            )
+            if isinstance(state, dict)
+            else 0
+        ),
         "observation": (
             deepcopy(state.get("observation"))
             if isinstance(state, dict) and isinstance(state.get("observation"), dict)
