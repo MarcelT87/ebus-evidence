@@ -124,5 +124,8 @@ def test_shareable_report_omits_absolute_raw_path():
     assert "raw_path" not in exported
     assert exported["raw_path_source"] == "manual"
     assert exported["source_files"] == ["ebusd.raw"]
-    assert exported["privacy"] == {"absolute_paths_included": False}
+    assert exported["privacy"] == {
+        "absolute_paths_included": False,
+        "absolute_timestamps_included": True,
+    }
     assert report["raw_path"] == "/private/host/path/ebusd.raw"
