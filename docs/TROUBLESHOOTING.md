@@ -44,6 +44,42 @@ On Windows PowerShell:
 
 ---
 
+# 1A. `.venv/bin/activate` does not exist
+
+If you see:
+
+```text
+bash: .venv/bin/activate: No such file or directory
+bash: python: command not found
+```
+
+check the system Python first:
+
+```bash
+python3 --version
+command -v python3
+```
+
+`ebus-evidence` currently requires Python 3.11 or newer.
+
+If Python 3.11+ is available but `.venv` is missing:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+On Debian/Ubuntu, if creating the virtual environment reports that `venv` or `ensurepip` is unavailable, install the distribution's Python venv package first, commonly:
+
+```bash
+sudo apt install python3-venv
+```
+
+Do not replace `python3` with `python` until the virtual environment has been activated. Many Linux systems provide `python3` but no global `python` command.
+
+---
+
 # 2. `python3 -m venv` fails
 
 Typical Debian/Ubuntu error:
