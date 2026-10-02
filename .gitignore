@@ -31,6 +31,7 @@ contexts/
 *.sqlite
 *.sqlite3
 *.tmp
+.*.writer.lock
 
 # Environment / credentials
 .env

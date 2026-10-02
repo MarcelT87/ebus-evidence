@@ -928,6 +928,44 @@ Do not edit the source raw log merely to remove these records.
 
 ---
 
+# 37. Collection/import says the evidence state is already in use
+
+Example:
+
+```text
+error: evidence state is already in use by another writer: data/evidence-state.json
+```
+
+This is a safety check. Only one state-writing command may use a given evidence
+state at a time.
+
+The protected commands are:
+
+- `./evidence collect`;
+- `./evidence import`;
+- expert `ebus-evidence watch --state ...`.
+
+Check whether another collection/import/watch process is still running. Stop
+that process normally, or use a genuinely different `--state` when you intend
+to create a separate observation.
+
+A hidden file similar to:
+
+```text
+data/.evidence-state.json.writer.lock
+```
+
+may exist even when no writer is running. This is normal. The file itself is
+not the lock; the operating system owns/releases the actual advisory lock when
+the process starts/exits or crashes.
+
+Do **not** delete the file as a way to bypass an active writer. If no writer is
+running and the error persists, check filesystem permissions and whether the
+state directory is on an unusual filesystem with incompatible locking
+semantics.
+
+---
+
 # Related documentation
 
 - [Installation and first run](INSTALL.md)
