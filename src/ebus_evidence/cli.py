@@ -410,6 +410,7 @@ def _bundle(args: argparse.Namespace) -> int:
             profile,
             state_path=args.state,
             context_dir=args.context_dir,
+            system_path=args.system,
             include_context_raw=not args.no_context_raw,
         )
     except BundleError as exc:
@@ -426,6 +427,15 @@ def _bundle(args: argparse.Namespace) -> int:
         f"{result['manifest']['context_raw_count']} raw"
     )
     print(f"State included: {'yes' if result['manifest']['evidence_state_included'] else 'no'}")
+    print(
+        "System identity: "
+        f"{'yes' if result['manifest']['system_identity_included'] else 'no'}"
+    )
+    if result["system_identity"] is not None:
+        print(
+            "Topology SHA256: "
+            f"{result['system_identity']['topology_signature_sha256']}"
+        )
     print(f"SHA256: {result['sha256']}")
     print("No absolute paths, resume checkpoint, host metadata or credentials are exported.")
     return 0
@@ -446,6 +456,12 @@ def _verify(args: argparse.Namespace) -> int:
     print(f"Created by tool version: {result['tool_version']}")
     print(f"Members: {result['member_count']}")
     print(f"State included: {'yes' if result['state_included'] else 'no'}")
+    print(
+        "System identity: "
+        f"{'yes' if result['system_identity_included'] else 'no'}"
+    )
+    if result["topology_signature_sha256"] is not None:
+        print(f"Topology SHA256: {result['topology_signature_sha256']}")
     print(
         "Contexts: "
         f"{result['context_metadata_count']} metadata, "
@@ -609,6 +625,10 @@ def build_parser() -> argparse.ArgumentParser:
     bundle.add_argument(
         "--context-dir",
         help="optional directory containing context JSON/raw pairs",
+    )
+    bundle.add_argument(
+        "--system",
+        help="optional validated ebus-evidence system identity JSON",
     )
     bundle.add_argument(
         "--no-context-raw",
