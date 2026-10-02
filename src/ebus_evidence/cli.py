@@ -427,6 +427,21 @@ def _bundle(args: argparse.Namespace) -> int:
         f"{result['manifest']['context_raw_count']} raw"
     )
     print(f"State included: {'yes' if result['manifest']['evidence_state_included'] else 'no'}")
+    state_summary = result.get("state_summary")
+    observation = (
+        state_summary.get("observation")
+        if isinstance(state_summary, dict)
+        else None
+    )
+    if isinstance(observation, dict):
+        print(
+            "Observation: "
+            f"frames={observation['frames_seen']} "
+            f"passive={observation['passive_frames']} "
+            f"ebusd_initiated={observation['ebusd_initiated_frames']} "
+            f"non_frames={observation['non_frames']} "
+            f"skipped={observation['skipped']}"
+        )
     print(
         "System identity: "
         f"{'yes' if result['manifest']['system_identity_included'] else 'no'}"
@@ -456,6 +471,16 @@ def _verify(args: argparse.Namespace) -> int:
     print(f"Created by tool version: {result['tool_version']}")
     print(f"Members: {result['member_count']}")
     print(f"State included: {'yes' if result['state_included'] else 'no'}")
+    observation = result.get("observation")
+    if isinstance(observation, dict):
+        print(
+            "Observation: "
+            f"frames={observation['frames_seen']} "
+            f"passive={observation['passive_frames']} "
+            f"ebusd_initiated={observation['ebusd_initiated_frames']} "
+            f"non_frames={observation['non_frames']} "
+            f"skipped={observation['skipped']}"
+        )
     print(
         "System identity: "
         f"{'yes' if result['system_identity_included'] else 'no'}"
