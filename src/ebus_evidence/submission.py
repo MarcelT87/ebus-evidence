@@ -71,6 +71,10 @@ def _preflight_submission_zip(path: Path) -> tuple[str, int, str]:
                 f"submission has too many ZIP members (>{MAX_SUBMISSION_MEMBERS})"
             )
 
+        names = [info.filename for info in infos]
+        if len(names) != len(set(names)):
+            raise SubmissionError("submission ZIP contains duplicate member names")
+
         total_uncompressed = sum(info.file_size for info in infos)
         if total_uncompressed > MAX_SUBMISSION_UNCOMPRESSED_BYTES:
             raise SubmissionError(
@@ -137,25 +141,6 @@ def _preflight_submission_zip(path: Path) -> tuple[str, int, str]:
         return matched[0], matched[1], embedded_sha256
 
 
-def _trusted_profile_sha256(profile_name: str, profile_version: int) -> str:
-    try:
-        trusted = load_profile(profile_name)
-    except ProfileError as exc:
-        raise SubmissionError(
-            f"profile is not an accepted bundled submission profile: "
-            f"{profile_name!r}"
-        ) from exc
-
-    trusted_version = trusted.get("version", 1)
-    if trusted_version != profile_version:
-        raise SubmissionError(
-            "submission profile version is not the currently bundled version: "
-            f"submitted v{profile_version}, bundled v{trusted_version}"
-        )
-
-    return hashlib.sha256(_canonical_profile_bytes(trusted)).hexdigest()
-
-
 def verify_submission_bundle(path: str | Path) -> dict[str, Any]:
     bundle_path = Path(path)
     if not bundle_path.is_file():
@@ -206,21 +191,13 @@ def verify_submission_bundle(path: str | Path) -> dict[str, Any]:
         )
 
     provenance = result["provenance"]
-    if trusted_profile_sha256:
-        if result["profile"] != trusted_name or result["profile_version"] != trusted_version:
-            raise SubmissionError(
-                "verified profile identity does not match the trusted preflight profile"
-            )
-        if provenance["profile_sha256"] != trusted_profile_sha256:
-            raise SubmissionError(
-                "embedded profile hash changed between preflight and verification"
-            )
-    else:
-        # A missing profile.yaml is normally reported by verify_bundle before
-        # reaching this branch.
-        trusted_profile_sha256 = _trusted_profile_sha256(
-            result["profile"],
-            result["profile_version"],
+    if result["profile"] != trusted_name or result["profile_version"] != trusted_version:
+        raise SubmissionError(
+            "verified profile identity does not match the trusted preflight profile"
+        )
+    if provenance["profile_sha256"] != trusted_profile_sha256:
+        raise SubmissionError(
+            "embedded profile hash changed between preflight and verification"
         )
 
     return {
