@@ -1,5 +1,7 @@
 import json
 
+import ebus_evidence.importer as importer_module
+
 from ebus_evidence.bundle import verify_bundle
 from ebus_evidence.cli import main
 from ebus_evidence.state import EvidenceStateStore
@@ -192,3 +194,29 @@ def test_static_import_can_include_rotated_file(tmp_path, monkeypatch):
     assert observation["frames_seen"] == 2
     assert observation["first_frame_timestamp"]["raw"] == "2026-10-01 09:59:59.000"
     assert observation["last_frame_timestamp"]["raw"] == "2026-10-01 10:00:01.000"
+
+
+def test_static_import_aborts_if_source_changes_without_publishing_state(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "changing-ebusd.raw"
+    raw.write_bytes(_matching_record("2026-10-01 10:00:01.000"))
+
+    fingerprints = iter(
+        [
+            (1, 2, 100, 10),
+            (1, 2, 101, 11),
+        ]
+    )
+    monkeypatch.setattr(
+        importer_module,
+        "_fingerprint",
+        lambda _path: next(fingerprints),
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 2
+    out = capsys.readouterr().out
+    assert "raw source changed during import" in out
+    assert not (tmp_path / "data" / "evidence-state.json").exists()
+    assert not (tmp_path / "data" / "contexts").exists()
