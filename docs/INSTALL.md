@@ -159,6 +159,15 @@ It does not send bus traffic or modify the heating system.
 
 If the raw log is usable, continue to **Collect evidence** below.
 
+When you run the bare beginner command `./evidence doctor`, the line
+
+```text
+Profile .............. not checked
+```
+
+is expected. `doctor` is validating discovery/raw-log readiness at that point.
+The normal bundled profile is loaded and validated by `./evidence collect`.
+
 If discovery does not fit your installation, use a file explicitly:
 
 ```bash
