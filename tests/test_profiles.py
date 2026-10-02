@@ -19,6 +19,12 @@ def test_load_bundled_profile_by_name():
     assert profile["version"] == 2
 
 
+def test_repository_profile_matches_bundled_profile():
+    explicit = load_profile(ROOT / "profiles" / "hw5103-open-evidence.yaml")
+    bundled = load_profile("hw5103-open-evidence")
+    assert explicit == bundled
+
+
 def test_unknown_bundled_profile_is_rejected():
     with pytest.raises(ProfileError):
         load_profile("does-not-exist")
