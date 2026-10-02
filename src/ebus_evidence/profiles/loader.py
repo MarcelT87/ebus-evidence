@@ -40,6 +40,9 @@ def validate_profile_data(data: Any) -> dict[str, Any]:
         raise ProfileError("profile root must be a mapping")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise ProfileError("profile requires a non-empty name")
+    version = data.get("version", 1)
+    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+        raise ProfileError("profile version must be a positive integer")
     checks = data.get("checks")
     if not isinstance(checks, list) or not checks:
         raise ProfileError("profile requires at least one check")
