@@ -148,6 +148,8 @@ ebus-evidence bundle \
   --output evidence.zip
 ```
 
+**Raw context files are excluded by default.** Context metadata can still be included.
+
 Verify it before sharing:
 
 ```bash
@@ -160,18 +162,18 @@ A valid bundle reports:
 Status: VALID
 ```
 
-For a more conservative export without raw context payloads:
+Only when you have reviewed the raw context and intentionally want to share it:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --no-context-raw \
-  --output evidence-metadata.zip
+  --include-context-raw \
+  --output evidence-with-context-raw.zip
 ```
 
-The exporter deliberately omits local resume checkpoint details, absolute local paths, host metadata and credentials. Small context `.raw` files still contain real eBUS payloads and should be reviewed before public sharing.
+The exporter deliberately omits local resume checkpoint details, absolute local paths, host metadata and credentials. Explicitly included context `.raw` files contain real eBUS payloads and should be reviewed before public sharing.
 
 ## Community cross-installation test
 
