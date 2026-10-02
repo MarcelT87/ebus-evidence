@@ -92,6 +92,7 @@ class ContextCaptureManager:
             default=0.0,
         )
         self.buffer: Deque[tuple[datetime, bytes]] = deque()
+        self.first_observed_at: datetime | None = None
         self.active: dict[str, ContextSession] = {}
         self.completed = 0
         self.triggered = 0
@@ -105,6 +106,9 @@ class ContextCaptureManager:
         timestamp = record_datetime(record)
         if timestamp is None:
             return
+
+        if self.first_observed_at is None:
+            self.first_observed_at = timestamp
 
         for check_id, session in list(self.active.items()):
             if timestamp > session.end_at:
@@ -159,8 +163,10 @@ class ContextCaptureManager:
             for record_time, record in self.buffer
             if start_at <= record_time <= timestamp
         ]
-        oldest = self.buffer[0][0] if self.buffer else timestamp
-        pre_window_complete = oldest <= start_at
+        pre_window_complete = (
+            self.first_observed_at is not None
+            and self.first_observed_at <= start_at
+        )
 
         self.active[check["id"]] = ContextSession(
             check_id=check["id"],
