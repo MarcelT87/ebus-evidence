@@ -167,7 +167,7 @@ ebus-evidence watch \
 ```
 
 `analyze` inspects existing raw-log history. It does **not** create the
-persistent evidence state used by the normal `collect -> export` workflow.
+persistent evidence state used by `collect` or `import` before export.
 
 ## Privacy
 
@@ -190,7 +190,8 @@ context payloads in the ZIP.
 |---|---|
 | normal ebusd in Docker + readable message-mode raw log | supported and real-world validated |
 | normal ebusd via native/systemd + readable message-mode raw log | supported; more independent validation wanted |
-| copied/read-only mounted message-mode raw log | supported |
+| copied/static message-mode raw log | supported through `import` |
+| read-only mounted growing message-mode raw log | supported through `collect` |
 | Home Assistant OS eBUSd App/Add-on | file-based workflow |
 | direct adapter access | intentionally unsupported |
 | ebusd byte-mode raw log | unsupported |
