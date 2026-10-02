@@ -4,7 +4,7 @@ Evidence is most useful when it can be tied to a clearly described hardware and 
 
 `ebus-evidence` therefore keeps two kinds of information separate:
 
-1. the **declared product name** supplied by the user, for example `Vaillant 105/6 A`;
+1. the **declared product name** supplied by the user, for example `Vaillant YOUR-MODEL`;
 2. the **observed eBUS device identities** reported by an existing ebusd scan result.
 
 The product name is not used to guess the bus hardware.
@@ -67,13 +67,13 @@ The generated `data/system.json` retains only address, manufacturer, device ID, 
 
 ## 2. Create system.json
 
-Example for a user-declared Vaillant 105/6 A:
+Example for a user-declared Vaillant YOUR-MODEL:
 
 ```bash
 ebus-evidence system \
   --scan-result data/scan-result.txt \
   --manufacturer Vaillant \
-  --model "105/6 A" \
+  --model "YOUR-MODEL" \
   --output data/system.json
 ```
 
@@ -104,7 +104,7 @@ The user-declared marketing/product name is deliberately **not** part of the sig
 Therefore:
 
 - two technically identical device topologies produce the same signature;
-- changing `105/6 A` to another human label does not change the signature;
+- changing `YOUR-MODEL` to another human label does not change the signature;
 - firmware or hardware differences do change the signature.
 
 The signature is intended for grouping comparable systems. It is not a personal installation identifier.
