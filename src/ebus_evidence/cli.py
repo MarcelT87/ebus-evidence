@@ -461,6 +461,7 @@ def _bundle(args: argparse.Namespace) -> int:
             f"{result['system_identity']['topology_signature_sha256']}"
         )
     print(f"SHA256: {result['sha256']}")
+    print("Absolute timestamps: yes (observation/evidence time windows are exported)")
     print("No absolute paths, resume checkpoint, host metadata or credentials are exported.")
     return 0
 
@@ -501,6 +502,10 @@ def _verify(args: argparse.Namespace) -> int:
         f"{result['context_metadata_count']} metadata, "
         f"{result['context_raw_count']} raw"
     )
+    if result.get("absolute_timestamps_included") is True:
+        print("Absolute timestamps: yes (observation/evidence time windows are exported)")
+    elif result.get("absolute_timestamps_included") is None:
+        print("Absolute timestamps: legacy manifest; review evidence timestamps manually")
     print(
         "Deterministic layout: "
         f"{'yes' if result['deterministic_layout'] else 'no (content integrity still valid)'}"
