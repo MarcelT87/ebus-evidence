@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a problem with ebus-evidence itself
+title: "Bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report tool behavior here. For evidence contributions, use the **Evidence submission** form.
+
+        Do not paste credentials, full raw logs, private host configuration, or other
+        sensitive data. Security vulnerabilities should follow SECURITY.md instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: List the commands needed to reproduce the issue. Redact private paths or host details.
+      placeholder: |
+        1. ./evidence doctor ...
+        2. ./evidence collect ...
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: ebus-evidence version
+      description: Paste the output of ./evidence --version if available.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Docker
+        - Native Linux/systemd
+        - Home Assistant App/Add-on
+        - Static/copied raw-log workflow
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional non-sensitive details
+      description: Optional. Do not attach a complete raw log unless a maintainer specifically requests a reviewed sample.
