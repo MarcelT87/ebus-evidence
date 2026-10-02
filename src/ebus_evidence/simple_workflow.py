@@ -416,10 +416,14 @@ def export(
         if state_arg is not None:
             print(
                 "hint: the state exists but contains 0 observed frames; "
-                "run './evidence collect' while the raw log is growing"
+                "use './evidence collect' for a growing raw log, or import a "
+                "static copy into a fresh state with './evidence import --raw FILE'"
             )
         else:
-            print("hint: run './evidence collect' first")
+            print(
+                "hint: run './evidence collect' for a growing raw log, or "
+                "'./evidence import --raw FILE' for a static copy"
+            )
         return 2
 
     output.parent.mkdir(parents=True, exist_ok=True)
