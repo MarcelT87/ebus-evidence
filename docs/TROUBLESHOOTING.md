@@ -667,7 +667,7 @@ ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --output evidence.zip
+  --output data/evidence.zip
 ```
 
 If you deliberately need the reviewed raw context as well:
@@ -678,7 +678,7 @@ ebus-evidence bundle \
   --state data/evidence-state.json \
   --context-dir data/contexts \
   --include-context-raw \
-  --output evidence-with-context-raw.zip
+  --output data/evidence-with-context-raw.zip
 ```
 
 Raw context payloads can contain device-specific bus data. Review them before public sharing.
