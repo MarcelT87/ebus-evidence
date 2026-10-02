@@ -143,6 +143,131 @@ def build_system_document(
     return document
 
 
+def validate_system_document(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise SystemIdentityError("system identity root must be a mapping")
+
+    allowed_top = {
+        "format",
+        "topology_signature_sha256",
+        "devices",
+        "source",
+        "declared_product",
+    }
+    unknown_top = set(data) - allowed_top
+    if unknown_top:
+        raise SystemIdentityError(
+            "system identity has unsupported top-level fields: "
+            + ", ".join(sorted(unknown_top))
+        )
+
+    if data.get("format") != _SYSTEM_FORMAT:
+        raise SystemIdentityError("unsupported system identity format")
+
+    devices = data.get("devices")
+    if not isinstance(devices, list) or not devices:
+        raise SystemIdentityError("system identity requires a non-empty devices list")
+
+    normalized_devices: list[dict[str, str]] = []
+    seen_addresses: dict[str, dict[str, str]] = {}
+    required_device = {"address", "manufacturer", "id", "sw", "hw"}
+    for index, item in enumerate(devices):
+        if not isinstance(item, dict):
+            raise SystemIdentityError(f"device {index} must be a mapping")
+        if set(item) != required_device:
+            raise SystemIdentityError(
+                f"device {index} must contain only address/manufacturer/id/sw/hw"
+            )
+        if not all(isinstance(item[key], str) for key in required_device):
+            raise SystemIdentityError(f"device {index} fields must all be strings")
+        device = _normalize_device(item)
+        if not _ADDRESS_RE.fullmatch(device["address"]):
+            raise SystemIdentityError(f"device {index} has invalid address")
+        if not device["manufacturer"]:
+            raise SystemIdentityError(f"device {index} has empty manufacturer")
+        previous = seen_addresses.get(device["address"])
+        if previous is not None and previous != device:
+            raise SystemIdentityError(
+                f"conflicting devices for address {device['address']}"
+            )
+        seen_addresses[device["address"]] = device
+        normalized_devices.append(device)
+
+    normalized_devices = [
+        seen_addresses[address]
+        for address in sorted(seen_addresses, key=lambda value: int(value, 16))
+    ]
+
+    signature = data.get("topology_signature_sha256")
+    expected_signature = topology_signature(normalized_devices)
+    if (
+        not isinstance(signature, str)
+        or len(signature) != 64
+        or any(ch not in "0123456789abcdef" for ch in signature)
+    ):
+        raise SystemIdentityError(
+            "topology_signature_sha256 must be a lowercase SHA-256 hex digest"
+        )
+    if signature != expected_signature:
+        raise SystemIdentityError("topology signature does not match devices")
+
+    source = data.get("source")
+    expected_source = {
+        "type": "ebusctl-scan-result",
+        "retained_fields": ["address", "manufacturer", "id", "sw", "hw"],
+        "extra_scan_columns_retained": False,
+    }
+    if source != expected_source:
+        raise SystemIdentityError(
+            "system identity source metadata is unsupported or not privacy-minimized"
+        )
+
+    declared = data.get("declared_product")
+    normalized_declared: dict[str, str] | None = None
+    if declared is not None:
+        if not isinstance(declared, dict):
+            raise SystemIdentityError("declared_product must be a mapping")
+        unknown_declared = set(declared) - {"manufacturer", "model"}
+        if unknown_declared:
+            raise SystemIdentityError(
+                "declared_product has unsupported fields: "
+                + ", ".join(sorted(unknown_declared))
+            )
+        normalized_declared = {}
+        for key in ("manufacturer", "model"):
+            if key not in declared:
+                continue
+            value = declared[key]
+            if not isinstance(value, str) or not value.strip():
+                raise SystemIdentityError(
+                    f"declared_product {key} must be a non-empty string"
+                )
+            normalized_declared[key] = value.strip()
+        if not normalized_declared:
+            normalized_declared = None
+
+    normalized: dict[str, Any] = {
+        "format": _SYSTEM_FORMAT,
+        "topology_signature_sha256": expected_signature,
+        "devices": normalized_devices,
+        "source": expected_source,
+    }
+    if normalized_declared is not None:
+        normalized["declared_product"] = normalized_declared
+    return normalized
+
+
+def load_system_document(path: str | Path) -> dict[str, Any]:
+    system_path = Path(path)
+    if not system_path.is_file():
+        raise SystemIdentityError(f"system identity file not found: {system_path}")
+    try:
+        data = json.loads(system_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemIdentityError(f"cannot read system identity: {exc}") from exc
+    return validate_system_document(data)
+
+
 def create_system_document(
     scan_result_path: str | Path,
     output_path: str | Path,
@@ -160,10 +285,12 @@ def create_system_document(
         raise SystemIdentityError(f"cannot read scan result file: {exc}") from exc
 
     devices = parse_scan_result(text)
-    document = build_system_document(
-        devices,
-        declared_manufacturer=declared_manufacturer,
-        declared_model=declared_model,
+    document = validate_system_document(
+        build_system_document(
+            devices,
+            declared_manufacturer=declared_manufacturer,
+            declared_model=declared_model,
+        )
     )
 
     output = Path(output_path)
