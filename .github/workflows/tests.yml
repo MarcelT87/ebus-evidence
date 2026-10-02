@@ -37,3 +37,31 @@ jobs:
 
       - name: Test
         run: pytest -q
+
+
+  beginner-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Bootstrap install
+        run: bash install.sh
+
+      - name: Check launcher
+        run: |
+          ./evidence --version
+          ./evidence --help
+
+      - name: Beginner workflow on synthetic raw log
+        run: |
+          ./evidence doctor --raw tests/fixtures/sample.raw --profile hw5103-open-evidence
+          ./evidence collect --raw tests/fixtures/sample.raw --seconds 0.1
+          ./evidence status --raw tests/fixtures/sample.raw
+          ./evidence export
+          ./evidence verify data/evidence.zip
