@@ -235,6 +235,7 @@ The adapter transport used by ebusd is outside the evidence boundary.
 - **[System identity](docs/SYSTEM_IDENTITY.md)** — privacy-minimized hardware/firmware identity
 - **[Community test](docs/COMMUNITY_TEST.md)** — cross-installation contribution workflow
 - **[Submit evidence](docs/SUBMIT_EVIDENCE.md)** — attach a verified evidence ZIP for review
+- **[Bundle format v1](docs/BUNDLE_FORMAT.md)** — public ZIP/data contract for independent consumers
 - **[Home Assistant](docs/HOME_ASSISTANT.md)** — special file-based route for Home Assistant users
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** — symptom-based help
 - **[Project boundaries](docs/PROJECT_BOUNDARIES.md)** — what this repository owns and what stays outside it
