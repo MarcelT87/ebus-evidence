@@ -526,19 +526,46 @@ Do not use `--reset-checkpoint` merely to hide an unexplained gap.
 
 ---
 
-# 18. Profile mismatch when reusing state
+# 18. Profile version changed / rollover pending
 
-A state file belongs to a profile name/version.
+A state file remains bound to one profile name, but newer versions of that same
+profile can roll forward safely.
 
-If the state was created by a different profile, do not force it into another one.
+Typical status after updating:
 
-Safer options:
+```text
+Evidence state ...... profile rollover pending (v2 -> v3)
+Ready to export ..... NO
+```
 
-- use the original profile;
-- create a new state filename for the new profile;
-- archive the old state separately.
+Run the normal writer command once:
 
-Evidence aggregates from different profile definitions should not be silently mixed.
+```bash
+./evidence collect
+```
+
+The tool then:
+
+- archives the old profile/version observation as a historical epoch;
+- keeps the existing raw-log checkpoint;
+- starts the new profile version with 0 active-epoch frames;
+- does not replay old traffic into new checks.
+
+After that, `status` and `export` use the new active profile while the bundle
+retains the historical epoch.
+
+Old context metadata stays on disk but is excluded from current-profile export
+unless it belongs to the active profile version.
+
+The tool still refuses unsafe cases:
+
+- a different profile name;
+- a profile downgrade;
+- changed profile semantics without a version bump;
+- malformed state/epoch metadata.
+
+Do not edit the state JSON to bypass those checks. If you intentionally want a
+completely separate observation, choose a new `--state` path instead.
 
 ---
 
