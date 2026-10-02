@@ -100,14 +100,29 @@ sudo apt install -y git python3 python3-venv
 
 ## 3. Install
 
-Use a normal user account and a directory in your home folder:
+Use a normal user account and any directory where that user can write.
+
+The project does **not** require a specific installation path and does not need
+to live next to ebusd, Docker or under `/opt`. The home directory in the first
+example is only a convenient default:
 
 ```bash
-cd ~
+cd ~   # example only
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
 bash install.sh
 ```
+
+An explicit destination works as well:
+
+```bash
+git clone https://github.com/MarcelT87/ebus-evidence.git /path/to/ebus-evidence
+cd /path/to/ebus-evidence
+bash install.sh
+```
+
+The local `.venv`, launcher and default `data/` runtime files stay relative
+to the chosen checkout.
 
 The installer:
 
@@ -506,13 +521,17 @@ If unsure, omit timezone arguments. The original raw timestamp is preserved.
 
 ## 13. Update later
 
-Return to the repository and pull current code:
+Return to **the directory where you cloned the repository** and pull current
+code:
 
 ```bash
-cd ~/ebus-evidence
+cd /path/to/ebus-evidence
 git pull --ff-only
 bash install.sh
 ```
+
+If you used the home-directory example during installation, that path is
+`~/ebus-evidence`.
 
 The installer reuses the existing `.venv` when possible and reinstalls the
 current checkout.
