@@ -65,3 +65,6 @@ jobs:
           ./evidence status --raw tests/fixtures/sample.raw
           ./evidence export
           ./evidence verify data/evidence.zip
+
+      - name: Bootstrap leaves checkout clean
+        run: test -z "$(git status --porcelain)"
