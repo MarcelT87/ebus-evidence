@@ -7,6 +7,7 @@ import pytest
 
 import ebus_evidence.submission as submission
 from ebus_evidence.bundle import create_bundle, verify_bundle
+from ebus_evidence.cli import main
 from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.state import EvidenceStateStore
 from ebus_evidence.submission import SubmissionError, verify_submission_bundle
@@ -111,3 +112,13 @@ def test_submission_preflight_rejects_member_count_before_verification(
 
     with pytest.raises(SubmissionError, match="too many ZIP members"):
         verify_submission_bundle(bundle)
+
+
+def test_submission_cli_reports_policy_pass(tmp_path, capsys):
+    bundle, _ = _valid_submission(tmp_path)
+
+    assert main(["verify", "--submission", str(bundle)]) == 0
+    out = capsys.readouterr().out
+
+    assert "Status: VALID" in out
+    assert "Submission policy: PASS" in out
