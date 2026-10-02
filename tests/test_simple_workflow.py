@@ -181,14 +181,30 @@ def test_beginner_profile_rollover_preserves_old_coverage_without_replay(
     ) == 0
     status_out = capsys.readouterr().out
     assert "profile rollover pending (v2 -> v3)" in status_out
-    assert "Ready to export ..... NO" in status_out
+    assert "Rollover preview .... read-only" in status_out
+    assert "Ready to export ..... YES" in status_out
 
-    assert main(["export", "--profile", str(profile_v3_path)]) == 2
+    # Export can represent the rollover read-only, which keeps static-import-only
+    # installations usable even before a writer persists the new epoch locally.
+    assert main(["export", "--profile", str(profile_v3_path)]) == 0
     export_before_out = capsys.readouterr().out
-    assert "needs profile rollover before export" in export_before_out
-    assert "./evidence collect" in export_before_out
+    assert "Profile rollover .... v2 -> v3 (read-only preview)" in export_before_out
+    assert "Local state ......... unchanged until collect/watch persists rollover" in export_before_out
+    assert "Historical contexts . 1 (kept local; excluded)" in export_before_out
+    assert "Historical epochs .... 1 (1 frames)" in export_before_out
 
-    # No new raw bytes are appended here. Rollover must not replay old data.
+    preview_verified = verify_bundle(tmp_path / "data" / "evidence.zip")
+    assert preview_verified["valid"] is True
+    assert preview_verified["profile_version"] == 3
+    assert preview_verified["historical_epoch_count"] == 1
+    assert preview_verified["historical_frames"] == 1
+    assert preview_verified["observation"]["frames_seen"] == 0
+
+    unchanged_local = json.loads(state_path.read_text(encoding="utf-8"))
+    assert unchanged_local["profile_version"] == 2
+    assert "epochs" not in unchanged_local or unchanged_local["epochs"] == []
+
+    # No new raw bytes are appended here. Persisted rollover must not replay old data.
     assert main(
         [
             "collect",
