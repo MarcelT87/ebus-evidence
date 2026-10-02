@@ -8,6 +8,7 @@ from pathlib import Path
 from ebus_evidence import __version__
 from ebus_evidence.bundle import BundleError, create_bundle, verify_bundle
 from ebus_evidence.discovery.ebusd import EbusdDiscovery, discover_ebusd
+from ebus_evidence.locking import StateWriterLock, StateWriterLockError
 from ebus_evidence.input.raw_file import (
     RawParseError,
     iter_frames_many,
@@ -251,7 +252,7 @@ def _analyze(args: argparse.Namespace) -> int:
 
 
 
-def _watch(args: argparse.Namespace) -> int:
+def _watch_unlocked(args: argparse.Namespace) -> int:
     try:
         _validate_timezones(args)
     except TimezoneError as exc:
@@ -376,6 +377,33 @@ def _watch(args: argparse.Namespace) -> int:
                 print(f"         sample: {sample}")
     return 0
 
+
+
+def _run_with_state_writer_lock(
+    state_path: str,
+    callback,
+) -> int:
+    try:
+        with StateWriterLock(state_path):
+            return callback()
+    except StateWriterLockError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        print(
+            "hint: only one collect/import/watch --state writer may use an "
+            "evidence state at a time; stop the other writer or choose a "
+            "different --state. A leftover .writer.lock file is harmless.",
+            file=sys.stderr,
+        )
+        return 2
+
+
+def _watch(args: argparse.Namespace) -> int:
+    if not args.state:
+        return _watch_unlocked(args)
+    return _run_with_state_writer_lock(
+        args.state,
+        lambda: _watch_unlocked(args),
+    )
 
 
 def _system(args: argparse.Namespace) -> int:
@@ -527,28 +555,34 @@ def _verify(args: argparse.Namespace) -> int:
     return 0
 
 def _collect(args: argparse.Namespace) -> int:
-    return simple_collect(
-        raw_path=args.raw,
-        profile_name=args.profile,
-        state_path=args.state,
-        context_dir=args.context_dir,
-        seconds=args.seconds,
-        reset_checkpoint=args.reset_checkpoint,
-        state_flush_interval=args.state_flush_interval,
-        source_timezone=args.source_timezone,
-        display_timezone=args.display_timezone,
+    return _run_with_state_writer_lock(
+        args.state,
+        lambda: simple_collect(
+            raw_path=args.raw,
+            profile_name=args.profile,
+            state_path=args.state,
+            context_dir=args.context_dir,
+            seconds=args.seconds,
+            reset_checkpoint=args.reset_checkpoint,
+            state_flush_interval=args.state_flush_interval,
+            source_timezone=args.source_timezone,
+            display_timezone=args.display_timezone,
+        ),
     )
 
 
 def _import_raw(args: argparse.Namespace) -> int:
-    return simple_import_raw(
-        raw_path=args.raw,
-        profile_name=args.profile,
-        state_path=args.state,
-        context_dir=args.context_dir,
-        include_rotated=args.include_rotated,
-        source_timezone=args.source_timezone,
-        display_timezone=args.display_timezone,
+    return _run_with_state_writer_lock(
+        args.state,
+        lambda: simple_import_raw(
+            raw_path=args.raw,
+            profile_name=args.profile,
+            state_path=args.state,
+            context_dir=args.context_dir,
+            include_rotated=args.include_rotated,
+            source_timezone=args.source_timezone,
+            display_timezone=args.display_timezone,
+        ),
     )
 
 
