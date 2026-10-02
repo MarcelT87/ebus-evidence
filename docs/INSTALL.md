@@ -1,16 +1,23 @@
 # Installation and first run
 
-This guide is written for users who already have an eBUS installation and want to collect **passive, reproducible evidence** with `ebus-evidence`.
+This guide is for users who already have an eBUS installation and want to
+collect **passive, reproducible evidence** with `ebus-evidence`.
 
-You do not need Home Assistant, MQTT, Proxmox, or an analyzer database.
+You do not need Home Assistant, MQTT, Proxmox or an analyzer database.
 
-`ebus-evidence` does not talk to the eBUS adapter and does not send eBUS commands. It reads a raw log that is already written by normal `ebusd`.
+`ebus-evidence` does not talk to the eBUS adapter and does not send eBUS
+commands. It reads a message-mode raw log that is already written by normal
+`ebusd`.
 
-If you need help understanding Docker, native/systemd or remote ebusd installations, see [ebusd setup matrix](EBUSD_SETUPS.md).
+The normal beginner workflow is:
+
+```text
+install -> doctor -> collect -> export
+```
 
 ---
 
-## 1. Before installing anything: where does ebusd run?
+## 1. Before installing: where does ebusd run?
 
 Choose the closest option.
 
@@ -25,49 +32,32 @@ Examples:
 
 Do **not** start with `git clone` on the Home Assistant OS host.
 
-Use the dedicated beginner path:
+Use the dedicated path:
 
 **[Home Assistant](HOME_ASSISTANT.md)**
 
-The current recommended workflow is to let the eBUSd App write the message-mode raw log, then analyze that file on a normal computer.
+The current recommended workflow is to let the eBUSd App write the message-mode
+raw log, then analyze that file on a normal computer.
 
 ### B. ebusd in Docker on a Linux host
 
-Examples:
+Install `ebus-evidence` on the **Linux Docker host**, not inside the ebusd
+container.
 
-- Docker Compose;
-- `docker run john30/ebusd ...`;
-- Home Assistant Container on the same Linux host, with ebusd in another container.
-
-Install `ebus-evidence` on the **Linux Docker host**, not inside the ebusd container.
-
-Continue with [Requirements](#2-requirements).
+Continue below.
 
 ### C. ebusd installed directly on Linux
 
-Examples:
-
-- `ebusd.service`;
-- systemd on Debian, Ubuntu or Raspberry Pi OS;
-- ebusd started manually on a Linux machine.
-
 Install `ebus-evidence` on that Linux machine.
 
-Continue with [Requirements](#2-requirements).
+Continue below.
 
 ### D. ebusd runs on another computer
 
-You can install `ebus-evidence` on a different computer and analyze a copied or read-only mounted raw-log file.
+Install `ebus-evidence` on a normal computer and analyze a copied or read-only
+mounted raw-log file.
 
-Continue with [Requirements](#2-requirements).
-
-### E. I use Home Assistant but I do not know which type
-
-Start with:
-
-**[Home Assistant](HOME_ASSISTANT.md#3-i-use-home-assistant-but-do-not-know-which-type)**
-
-### F. I do not know where ebusd runs
+### E. I do not know where ebusd runs
 
 On a normal Linux machine, try:
 
@@ -76,11 +66,8 @@ docker ps --format 'table {{.Names}}\t{{.Image}}' | grep -i ebusd
 systemctl is-active ebusd
 ```
 
-- If the first command shows an ebusd container, use the Docker path.
-- If the second command prints `active`, use the native/systemd path.
-- If neither applies, ebusd may run on another computer or inside Home Assistant OS.
-
-At this point, identify the ebusd host before installing anything.
+If neither applies, ebusd may run on another computer or inside Home Assistant
+OS. Identify that host before changing anything.
 
 ---
 
@@ -88,10 +75,10 @@ At this point, identify the ebusd host before installing anything.
 
 The easiest supported environment is Linux with:
 
-- Python 3.11 or newer
-- Git
-- Python virtual environment support
-- read access to an ebusd message-mode raw log
+- Python 3.11 or newer;
+- Git;
+- Python virtual-environment support;
+- read access to an ebusd message-mode raw log.
 
 Check:
 
@@ -100,98 +87,101 @@ python3 --version
 git --version
 ```
 
-On Debian/Ubuntu/Raspberry Pi OS, install the usual prerequisites with:
+On Debian/Ubuntu/Raspberry Pi OS:
 
 ```bash
 sudo apt update
 sudo apt install -y git python3 python3-venv
 ```
 
-If `python3 --version` is older than 3.11, install a newer Python version before continuing.
-
 ---
 
-## 3. Install ebus-evidence
+## 3. Install
 
-A simple beginner-friendly location is your home directory:
+Use a normal user account and a directory in your home folder:
 
 ```bash
 cd ~
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
+bash install.sh
+```
 
+The installer:
+
+- checks for Python 3.11+;
+- creates a local `.venv` when needed;
+- installs the current checkout;
+- enables the local `./evidence` launcher.
+
+It does **not**:
+
+- access the eBUS adapter;
+- change ebusd configuration;
+- start an eBUS scan;
+- publish anything.
+
+Check:
+
+```bash
+./evidence --version
+./evidence --help
+```
+
+You do not need to activate the virtual environment when using `./evidence`.
+
+### Advanced/manual installation
+
+The standard Python path remains supported:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
-
-python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-Check the installation:
-
-```bash
-ebus-evidence --version
-ebus-evidence --help
-```
-
-When you open a new shell later, return to the repository and reactivate the virtual environment:
-
-```bash
-cd ebus-evidence
-source .venv/bin/activate
-```
-
-### Windows or macOS
-
-Offline analysis of an already copied raw-log file is possible in principle wherever Python 3.11+ works.
-
-Windows PowerShell activates the environment with:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-Automatic Docker/systemd discovery is primarily intended for Linux.
-
 ---
 
-## 4. Try automatic discovery first
+## 4. Check the existing ebusd/raw-log setup
 
-If normal ebusd runs on the same Linux host, run:
+Try:
 
 ```bash
-ebus-evidence doctor
+./evidence doctor
 ```
 
 `doctor` is read-only.
 
-It checks whether it can identify a normal ebusd Docker container or native systemd service and locate its configured raw log.
+It checks whether it can identify normal Docker/native ebusd and locate its
+configured raw log.
 
-It does not:
+It does not send bus traffic or modify the heating system.
 
-- access the eBUS adapter;
-- send eBUS telegrams;
-- change heating settings;
-- modify ebusd configuration;
-- read container environment variables.
+If the raw log is usable, continue to **Collect evidence** below.
 
-If `doctor` finds a valid **message-mode** raw log, continue with [Run the first analysis](#8-run-the-first-analysis).
+If discovery does not fit your installation, use a file explicitly:
 
-If it reports that raw logging is missing or cannot locate a file, continue below.
+```bash
+./evidence doctor \
+  --raw /path/to/ebusd.raw \
+  --profile hw5103-open-evidence
+```
 
 ---
 
-## 5. Enable a message-mode raw log in Docker ebusd
+## 5. If message-mode raw logging is not enabled
 
-`ebus-evidence` needs the normal ebusd message log.
+`ebus-evidence` needs normal ebusd **message-mode** raw logging.
 
-Do **not** use byte mode:
+Do not use:
 
 ```text
 --lograwdata=bytes
 ```
 
-For Docker Compose, a simple example is:
+### Docker ebusd
+
+Example Compose fragment:
 
 ```yaml
 services:
@@ -204,42 +194,28 @@ services:
       - /srv/ebusd/rawlog:/rawlog
 ```
 
-This example uses:
+The example maps:
 
-- `/rawlog/ebusd.raw` inside the container;
-- `/srv/ebusd/rawlog/ebusd.raw` on the Docker host;
-- about 100 MiB maximum active raw-log size.
+```text
+container: /rawlog/ebusd.raw
+host:      /srv/ebusd/rawlog/ebusd.raw
+```
 
-Use a host directory that fits your own installation. The example path is not required.
+Use a path appropriate for your own installation.
 
-After changing Docker Compose, recreate/restart the ebusd container using the method you normally use.
-
-Then check on the host:
+After applying your normal Docker configuration/restart procedure:
 
 ```bash
 ls -lh /srv/ebusd/rawlog/
 head -n 5 /srv/ebusd/rawlog/ebusd.raw
 ```
 
-A normal record looks roughly like:
+A host mount matters because a raw log that exists only inside a disposable
+container can disappear when the container is recreated.
 
-```text
-2026-10-01 10:00:00.000 <1008b507020900...
-```
+### Native/systemd ebusd
 
-If your host path is different, substitute your real path.
-
-### Important Docker note
-
-A raw file that exists only inside the container is not useful after the container is replaced.
-
-Mount the raw-log directory to the Docker host if you want persistent analysis and restart-safe watch state.
-
----
-
-## 6. Enable a message-mode raw log in native/systemd ebusd
-
-Normal ebusd supports these raw logging options:
+Typical options are:
 
 ```text
 --lograwdata
@@ -247,300 +223,284 @@ Normal ebusd supports these raw logging options:
 --lograwdatasize=102400
 ```
 
-Add them to the place where **your existing ebusd startup arguments are configured**.
+Add them to the place where **your existing ebusd startup arguments are
+configured**. Do not replace a working service definition blindly.
 
-Do not blindly replace a systemd service file from an internet example; ebusd packages and local installations differ.
-
-Restart ebusd using your normal service setup, commonly:
-
-```bash
-sudo systemctl restart ebusd
-```
-
-Then check:
+After restarting using your normal setup:
 
 ```bash
 ls -lh /var/log/ebusd.raw*
 head -n 5 /var/log/ebusd.raw
 ```
 
-If ebusd cannot create or update the file, fix the directory/file permissions for the user running ebusd.
+More setup examples are in **[ebusd setups](EBUSD_SETUPS.md)**.
 
-Again, do **not** configure:
+---
+
+## 6. Collect evidence
+
+For the normal supported Vaillant/HW5103 workflow:
+
+```bash
+./evidence collect
+```
+
+The command automatically uses:
 
 ```text
---lograwdata=bytes
+profile:      hw5103-open-evidence
+state:        data/evidence-state.json
+context-dir:  data/contexts
+raw log:      auto-discovered when possible
 ```
 
-`ebus-evidence` currently expects message-mode records.
+Stop with:
 
----
+```text
+Ctrl-C
+```
 
-## 7. Use a raw log manually
+Collection is passive. It follows records written by ebusd and does not generate
+bus traffic.
 
-If automatic discovery does not fit your installation, pass the file yourself:
+The persistent state is required for the normal `collect -> export` workflow.
+This is the step that builds the evidence state used by the ZIP.
+
+A later run:
 
 ```bash
-ebus-evidence doctor \
-  --raw /path/to/ebusd.raw \
-  --profile hw5103-open-evidence
+./evidence collect
 ```
 
-If a rotated sibling such as `ebusd.raw.old` exists and should be included in offline analysis:
-
-```bash
-ebus-evidence doctor \
-  --raw /path/to/ebusd.raw \
-  --include-rotated \
-  --profile hw5103-open-evidence
-```
-
----
-
-## 8. Run the first analysis
-
-### Before you interpret the result
-
-The current bundled profile, `hw5103-open-evidence`, is **Vaillant-family specific** and comes from the project's current Vaillant/HW5103 research work.
-
-This distinction matters:
-
-- the raw-log parser is not designed only for one Vaillant installation;
-- the bundled evidence checks **are** currently targeted at that Vaillant research scope;
-- zero matches on another manufacturer are therefore not evidence that ebusd or the parser is broken;
-- support for additional manufacturers should be added through separate evidence profiles rather than by guessing meanings from the Vaillant profile.
-
-When automatic discovery works:
-
-```bash
-ebus-evidence analyze \
-  --profile hw5103-open-evidence
-```
-
-With a manual path:
-
-```bash
-ebus-evidence analyze \
-  --raw /path/to/ebusd.raw \
-  --profile hw5103-open-evidence
-```
-
-To include the normal ebusd rotated `.old` file:
-
-```bash
-ebus-evidence analyze \
-  --include-rotated \
-  --profile hw5103-open-evidence
-```
-
-The bundled `hw5103-open-evidence` profile is intentionally narrow. A clean run with zero matches can simply mean that your installation does not contain those identities.
-
-Optional JSON export:
-
-```bash
-ebus-evidence analyze \
-  --profile hw5103-open-evidence \
-  --json data/analysis.json
-```
-
-The shareable JSON export omits the absolute raw-log host path. It does retain absolute evidence timestamps and declares both privacy properties in the exported JSON.
-
----
-
-## 9. Timestamp timezone
-
-ebusd raw-log timestamps do not carry an explicit UTC offset. `ebus-evidence` therefore does not guess.
-
-If you know that the source timestamps are UTC:
-
-```bash
-ebus-evidence analyze \
-  --profile hw5103-open-evidence \
-  --source-timezone UTC
-```
-
-For a local display timezone:
-
-```bash
-ebus-evidence analyze \
-  --profile hw5103-open-evidence \
-  --source-timezone UTC \
-  --display-timezone Europe/Berlin
-```
-
-Use the timezone that is correct for your own installation.
-
-If you are not sure, omit the timezone arguments. The original raw timestamp is preserved.
-
----
-
-## 10. Optional: passive live watch
-
-Once `doctor` and `analyze` work, you can follow new records:
-
-```bash
-ebus-evidence watch \
-  --profile hw5103-open-evidence
-```
-
-Stop with `Ctrl-C`.
+reuses the saved checkpoint and resumes when continuity can be proven.
 
 For a short test:
 
 ```bash
-ebus-evidence watch \
-  --profile hw5103-open-evidence \
-  --seconds 15
+./evidence collect --seconds 15
 ```
 
-`--seconds` limits how long the **watch process runs**. When a persistent state/checkpoint is reused after watch was stopped, the tool first resumes at the saved raw-log position and can process backlog that accumulated during the pause. A 60-second process run may therefore cover more than 60 seconds of raw-log timestamps. This preserves continuity instead of silently discarding bus history.
+With a manual raw-log path:
 
-Watch reads the raw-log file only. It does not generate bus traffic.
+```bash
+./evidence collect --raw /path/to/ebusd.raw
+```
 
 ---
 
-## 11. Recommended: persistent evidence state
+## 7. Check collection status
 
-For longer observation, create a local data directory inside the checkout:
+At any time:
 
 ```bash
-mkdir -p data/contexts
+./evidence status
 ```
 
-The repository's `.gitignore` excludes `data/`. This is the preferred place for local files such as evidence state, system identity and copied scan-result input.
+The status command reports:
 
-Then run:
+- whether the raw log can be resolved;
+- active profile;
+- whether evidence state exists and is valid;
+- observed frame/event counts;
+- available context metadata;
+- optional system identity;
+- whether there is evidence ready to export.
+
+For a manual raw-log setup:
 
 ```bash
+./evidence status --raw /path/to/ebusd.raw
+```
+
+---
+
+## 8. Optional: add system identity
+
+For cross-installation hardware/firmware comparison, add a structured system
+identity when an **existing** `ebusctl scan result` is already available.
+
+Do not run `ebusctl scan` or `ebusctl scan full` merely for this project.
+
+Follow **[System identity](SYSTEM_IDENTITY.md)** to create:
+
+```text
+data/system.json
+```
+
+If no existing scan result is available, skip this step. Export still works.
+
+---
+
+## 9. Export and verify the shareable ZIP
+
+Run:
+
+```bash
+./evidence export
+```
+
+The command uses the standard local paths automatically:
+
+- `data/evidence-state.json`;
+- `data/contexts` when present;
+- `data/system.json` when present and valid;
+- output `data/evidence.zip`.
+
+It then immediately runs the existing bundle verifier.
+
+A successful result reports:
+
+```text
+Status .............. VALID
+Deterministic ....... yes
+Ready to share.
+```
+
+Raw context payloads are excluded by default.
+
+Absolute observation/evidence timestamps remain included because timing is
+research evidence. The bundle and verifier disclose this explicitly.
+
+Only if you intentionally want reviewed raw context payloads inside the ZIP:
+
+```bash
+./evidence export --include-context-raw
+```
+
+Review such raw context before publishing it.
+
+---
+
+## 10. Optional: inspect existing raw-log history
+
+`analyze` is useful for inspecting historical data:
+
+```bash
+./evidence analyze --profile hw5103-open-evidence
+```
+
+or:
+
+```bash
+./evidence analyze \
+  --raw /path/to/ebusd.raw \
+  --profile hw5103-open-evidence
+```
+
+Important:
+
+> `analyze` does **not** create the persistent evidence state used by
+> `collect -> export`.
+
+This keeps offline analysis separate from persistent evidence collection.
+
+Optional shareable JSON:
+
+```bash
+./evidence analyze \
+  --profile hw5103-open-evidence \
+  --json data/analysis.json
+```
+
+The JSON omits the absolute raw-log host path but retains/discloses absolute
+evidence timestamps.
+
+---
+
+## 11. Advanced explicit commands
+
+Experienced users can continue to use the full interface:
+
+```text
+ebus-evidence doctor
+ebus-evidence analyze
+ebus-evidence watch
+ebus-evidence system
+ebus-evidence bundle
+ebus-evidence verify
+```
+
+Example explicit persistent watch:
+
+```bash
+source .venv/bin/activate
+
 ebus-evidence watch \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts
 ```
 
-The state keeps compact evidence counts and a restart checkpoint.
-
-The context directory is only used when an explicit rare trigger in the profile fires.
-
-Both `data/` and generated raw/ZIP artifacts are ignored by this repository's `.gitignore` so they are less likely to be committed accidentally.
-
----
-
-## 12. Identify the system and create a shareable bundle
-
-For cross-installation hardware/firmware comparison, add a structured system identity when an **existing** `ebusctl scan result` is already available.
-
-Do not run `ebusctl scan` or `ebusctl scan full` merely for this project.
-
-Follow [System identity](SYSTEM_IDENTITY.md) to create:
-
-```text
-data/system.json
-```
-
-If no existing scan result is available, skip system identity for now. Evidence state is still valid without it.
-
-For the normal complete bundle:
+Example explicit bundle:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --system data/system.json \
   --output data/evidence.zip
-```
 
-If you do not have `data/system.json`, omit the `--system` line.
-
-If there are no context captures yet, keeping `--context-dir data/contexts` is harmless when the directory exists; a state-only bundle is also valid.
-
-Raw context payloads are excluded by default. The bundle contains aggregate/state evidence and available context metadata without automatically publishing captured raw bus windows.
-
-Verify before sharing:
-
-```bash
 ebus-evidence verify data/evidence.zip
 ```
 
-Expected:
-
-```text
-Status: VALID
-```
-
-Only if you intentionally want reviewed raw context payloads inside the bundle:
-
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --context-dir data/contexts \
-  --system data/system.json \
-  --include-context-raw \
-  --output data/evidence-with-context-raw.zip
-```
-
-If you do not have `data/system.json`, again omit the `--system` line.
-
-Review any explicitly included raw context before publishing it.
-
-The normal shared state also contains absolute observation/evidence timestamps. These are kept because timing is useful research evidence. New bundles declare this in their privacy manifest and the CLI prints `Absolute timestamps: yes`. Review the exact observation period before public sharing if it is sensitive.
-
+Custom paths, profiles, timezone handling, checkpoint controls and explicit
+bundle choices remain available through these commands.
 
 ---
 
-## 13. Update ebus-evidence later
+## 12. Timezones
 
-Return to the repository directory first.
+ebusd raw-log timestamps do not carry an explicit UTC offset.
+`ebus-evidence` therefore does not guess.
 
-Pull the current code **before** assuming that the virtual environment already exists:
+If you know the source timezone:
 
 ```bash
+./evidence collect \
+  --source-timezone UTC \
+  --display-timezone Europe/Berlin
+```
+
+If unsure, omit timezone arguments. The original raw timestamp is preserved.
+
+---
+
+## 13. Update later
+
+Return to the repository and pull current code:
+
+```bash
+cd ~/ebus-evidence
 git pull --ff-only
+bash install.sh
 ```
 
-Check the Python version:
+The installer reuses the existing `.venv` when possible and reinstalls the
+current checkout.
+
+Check:
 
 ```bash
-python3 --version
+./evidence --version
 ```
-
-If `.venv` is missing, create it:
-
-```bash
-python3 -m venv .venv
-```
-
-Then activate the environment and reinstall the current checkout:
-
-```bash
-source .venv/bin/activate
-python -m pip install -e .
-```
-
-Finally:
-
-```bash
-ebus-evidence --version
-```
-
-This update path is intentionally recovery-friendly: an older checkout may not have a `.venv` yet, or the virtual environment may have been removed while the Git checkout was kept.
-
-Do not use `git add` for generated evidence data. The repository ignores `data/`, raw logs, JSON runtime files and ZIP bundles so local evidence is less likely to be committed accidentally.
 
 ---
 
-## 14. What is not supported yet?
+## 14. Current input boundary
 
-Currently not considered a validated input path:
+Validated/supported input:
+
+- normal ebusd message-mode raw log;
+- Docker/native local file;
+- copied/read-only mounted file;
+- Home Assistant OS through a file-based workflow.
+
+Not currently supported as the primary evidence input:
 
 - ebusd byte-mode raw logging;
 - direct eBUS adapter access;
-- automatic live streaming from an ebusd host over the network;
+- automatic live network streaming from another ebusd host;
 - direct use of the ebusd client TCP port as the evidence stream.
-
-The common supported input is a normal **ebusd message-mode raw-log file**.
 
 ---
 
@@ -549,18 +509,18 @@ The common supported input is a normal **ebusd message-mode raw-log file**.
 Start with:
 
 ```bash
-ebus-evidence doctor
+./evidence doctor
+./evidence status
 ```
 
-or, with an explicit file:
+For a manual file:
 
 ```bash
-ebus-evidence doctor \
-  --raw /path/to/ebusd.raw \
-  --profile hw5103-open-evidence
+./evidence doctor --raw /path/to/ebusd.raw --profile hw5103-open-evidence
+./evidence status --raw /path/to/ebusd.raw
 ```
 
-Useful checks:
+Useful basic checks:
 
 ```bash
 python3 --version
@@ -569,30 +529,14 @@ ls -lh /path/to/ebusd.raw*
 head -n 5 /path/to/ebusd.raw
 ```
 
-Common causes are:
-
-- Python older than 3.11;
-- virtual environment not activated;
-- missing read permission;
-- raw logging not enabled;
-- Docker raw directory not mounted to the host;
-- byte-mode raw logging instead of message mode;
-- an unusual ebusd installation that needs `--raw`;
-- a profile that simply does not match the installed devices.
-
-For symptom-based help, continue with [Troubleshooting](TROUBLESHOOTING.md).
+Then use **[Troubleshooting](TROUBLESHOOTING.md)**.
 
 ---
 
-## Upstream ebusd references
+## Upstream ebusd
 
-ebusd itself is a separate project.
-
-Useful upstream documentation:
+ebusd itself is a separate project:
 
 - https://github.com/john30/ebusd
 - https://github.com/john30/ebusd/wiki
 - https://github.com/john30/ebusd/wiki/2.-Run
-- https://github.com/john30/ebusd/blob/master/contrib/docker/docker-compose.example.yaml
-
-`ebus-evidence` does not install or configure ebusd automatically.
