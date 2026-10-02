@@ -25,6 +25,22 @@ fi
 echo "Installing ebus-evidence..."
 .venv/bin/python -m pip install -e .
 
+cat > evidence <<'EOF'
+#!/usr/bin/env sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BIN="$ROOT/.venv/bin/ebus-evidence"
+
+if [ ! -x "$BIN" ]; then
+  echo "error: ebus-evidence is not installed in $ROOT/.venv" >&2
+  echo "run: bash install.sh" >&2
+  exit 2
+fi
+
+cd "$ROOT"
+exec "$BIN" "$@"
+EOF
 chmod +x evidence
 
 echo
