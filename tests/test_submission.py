@@ -61,7 +61,32 @@ def test_submission_rejects_modified_profile_with_trusted_name(tmp_path):
     create_bundle(output, modified, state_path=state_path)
 
     assert verify_bundle(output)["valid"] is True
-    with pytest.raises(SubmissionError, match="trusted bundled profile"):
+    with pytest.raises(SubmissionError, match="trusted bundled submission profile"):
+        verify_submission_bundle(output)
+
+
+def test_submission_rejects_untrusted_profile_before_generic_verifier(
+    tmp_path, monkeypatch
+):
+    trusted = load_profile("hw5103-open-evidence")
+    modified = deepcopy(trusted)
+    modified["checks"][0]["match"] = {
+        **modified["checks"][0]["match"],
+        "target": "00",
+    }
+
+    state_path = tmp_path / "state.json"
+    store = EvidenceStateStore.open(state_path, modified)
+    store.observe_frame(_timestamp(), initiated_by_ebusd=False)
+    output = tmp_path / "untrusted-profile.zip"
+    create_bundle(output, modified, state_path=state_path)
+
+    def should_not_run(_path):
+        raise AssertionError("generic verifier must not parse untrusted profile first")
+
+    monkeypatch.setattr(submission, "verify_bundle", should_not_run)
+
+    with pytest.raises(SubmissionError, match="trusted bundled submission profile"):
         verify_submission_bundle(output)
 
 
