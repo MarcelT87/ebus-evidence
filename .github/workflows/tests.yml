@@ -69,5 +69,17 @@ jobs:
           ./evidence export
           ./evidence verify data/evidence.zip
 
+      - name: Static copied-file import workflow
+        run: |
+          rm -rf data
+          cp tests/fixtures/sample.raw /tmp/ebusd-evidence-import.raw
+          sha256sum /tmp/ebusd-evidence-import.raw > /tmp/ebusd-evidence-import.sha256
+          ./evidence doctor --raw /tmp/ebusd-evidence-import.raw --profile hw5103-open-evidence
+          ./evidence import --raw /tmp/ebusd-evidence-import.raw
+          sha256sum -c /tmp/ebusd-evidence-import.sha256
+          ./evidence status --raw /tmp/ebusd-evidence-import.raw
+          ./evidence export
+          ./evidence verify data/evidence.zip
+
       - name: Bootstrap leaves checkout clean
         run: test -z "$(git status --porcelain)"
