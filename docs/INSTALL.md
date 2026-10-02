@@ -335,6 +335,16 @@ ebus-evidence analyze \
 
 The bundled `hw5103-open-evidence` profile is intentionally narrow. A clean run with zero matches can simply mean that your installation does not contain those identities.
 
+Optional JSON export:
+
+```bash
+ebus-evidence analyze \
+  --profile hw5103-open-evidence \
+  --json data/analysis.json
+```
+
+The shareable JSON export omits the absolute raw-log host path. It does retain absolute evidence timestamps and declares both privacy properties in the exported JSON.
+
 ---
 
 ## 9. Timestamp timezone
