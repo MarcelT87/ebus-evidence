@@ -273,6 +273,27 @@ def test_beginner_profile_rollover_preserves_old_coverage_without_replay(
     assert after_new_data.historical_frames == 1
 
 
+def test_status_is_not_ready_when_context_metadata_is_invalid(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied.raw"
+    raw.write_bytes(
+        _record("2026-10-01 10:00:00.000")
+        + _matching_record("2026-10-01 10:00:01.000")
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    context_file = next((tmp_path / "data" / "contexts").glob("*.json"))
+    context_file.write_text("{invalid", encoding="utf-8")
+
+    capsys.readouterr()
+    assert main(["status", "--raw", str(raw)]) == 0
+    out = capsys.readouterr().out
+    assert "Context metadata .... invalid" in out
+    assert "Ready to export ..... NO" in out
+
+
 def test_export_automatically_includes_valid_system_identity(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     raw = tmp_path / "ebusd.raw"
