@@ -37,10 +37,12 @@ message-mode raw log
       ↓
 copy/read the raw-log file
       ↓
-run ebus-evidence on a normal Linux/macOS/Windows computer
+run ebus-evidence on a normal supported computer
 ```
 
-This keeps the Home Assistant appliance untouched.
+This keeps the Home Assistant appliance untouched. The documented beginner
+installation is currently validated on Linux; other Python environments may
+work but are not the primary supported path yet.
 
 ### Common eBUSd App
 
