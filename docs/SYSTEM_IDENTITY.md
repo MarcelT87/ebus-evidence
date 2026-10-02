@@ -4,7 +4,7 @@ Evidence is most useful when it can be tied to a clearly described hardware and 
 
 `ebus-evidence` therefore keeps two kinds of information separate:
 
-1. the **declared product name** supplied by the user, for example `Vaillant YOUR-MODEL`;
+1. the **declared product name** supplied by the user, for example manufacturer `YOUR-MANUFACTURER` and model `YOUR-MODEL`;
 2. the **observed eBUS device identities** reported by an existing ebusd scan result.
 
 The product name is not used to guess the bus hardware.
@@ -67,12 +67,12 @@ The generated `data/system.json` retains only address, manufacturer, device ID, 
 
 ## 2. Create system.json
 
-Example for a user-declared Vaillant YOUR-MODEL:
+Example (replace the placeholders with product information you actually know):
 
 ```bash
 ebus-evidence system \
   --scan-result data/scan-result.txt \
-  --manufacturer Vaillant \
+  --manufacturer "YOUR-MANUFACTURER" \
   --model "YOUR-MODEL" \
   --output data/system.json
 ```
