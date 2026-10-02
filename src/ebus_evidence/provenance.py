@@ -36,6 +36,9 @@ def tool_runtime_sha256(package_root: str | Path | None = None) -> str:
             key=lambda path: path.relative_to(root).as_posix(),
         )
 
+        if not files:
+            raise ProvenanceError(f"runtime package has no hashable files: {root}")
+
         for path in files:
             relative = path.relative_to(root).as_posix().encode("utf-8")
             data = path.read_bytes()
@@ -78,6 +81,9 @@ def git_source_provenance(package_root: str | Path | None = None) -> dict[str, A
         )
         repo_root = Path(repo_result.stdout.strip()).resolve()
         if not _looks_like_source_checkout(repo_root):
+            return None
+        source_package = (repo_root / "src" / "ebus_evidence").resolve()
+        if root != source_package:
             return None
 
         commit_result = subprocess.run(
