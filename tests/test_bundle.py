@@ -6,6 +6,7 @@ import pytest
 
 from ebus_evidence.bundle import BundleError, create_bundle, shared_state, verify_bundle
 from ebus_evidence.state import (
+    EvidenceStateStore,
     new_state,
     save_state,
     update_observation_frame,
@@ -25,6 +26,21 @@ PROFILE = {
         }
     ],
 }
+
+
+def _upgraded_profile():
+    return {
+        **PROFILE,
+        "version": PROFILE["version"] + 1,
+        "checks": PROFILE["checks"]
+        + [
+            {
+                "id": "new_check",
+                "description": "New check",
+                "match": {"source": "03", "target": "76", "pbsb": "b512"},
+            }
+        ],
+    }
 
 
 def _event():
@@ -283,6 +299,129 @@ def test_verify_accepts_valid_bundle(tmp_path):
     assert verified["context_metadata_count"] == 1
     assert verified["context_raw_count"] == 1
     assert verified["deterministic_layout"] is True
+
+
+def test_bundle_preserves_historical_epoch_and_excludes_old_contexts(tmp_path):
+    state_path = tmp_path / "state.json"
+    context_dir = tmp_path / "contexts"
+    _write_state(state_path)
+    _write_context(context_dir)
+
+    upgraded = _upgraded_profile()
+    rolled = EvidenceStateStore.open(
+        state_path,
+        upgraded,
+        allow_profile_rollover=True,
+    )
+    assert rolled.rolled_over_from == PROFILE["version"]
+    assert rolled.state["observation"]["frames_seen"] == 0
+    assert rolled.historical_frames == 1
+
+    output = tmp_path / "rolled.zip"
+    created = create_bundle(
+        output,
+        upgraded,
+        state_path=state_path,
+        context_dir=context_dir,
+        include_context_raw=True,
+    )
+
+    assert created["historical_context_metadata_excluded"] == 1
+    assert created["manifest"]["context_metadata_count"] == 0
+    assert created["manifest"]["context_raw_count"] == 0
+
+    with zipfile.ZipFile(output) as archive:
+        assert not any(name.startswith("contexts/") for name in archive.namelist())
+        shared = json.loads(archive.read("evidence/state.json"))
+        assert shared["profile_version"] == upgraded["version"]
+        assert shared["observation"]["frames_seen"] == 0
+        assert len(shared["epochs"]) == 1
+        epoch = shared["epochs"][0]
+        assert epoch["profile_version"] == PROFILE["version"]
+        assert epoch["observation"]["frames_seen"] == 1
+        assert epoch["checks"]["rare"]["matches"] == 1
+        assert "checkpoint" not in json.dumps(shared)
+
+    verified = verify_bundle(output)
+    assert verified["valid"] is True
+    assert verified["historical_epoch_count"] == 1
+    assert verified["historical_frames"] == 1
+    assert verified["context_metadata_count"] == 0
+    assert verified["context_raw_count"] == 0
+
+
+def test_verify_accepts_legacy_shared_state_without_epoch_fields(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    current = tmp_path / "current-state-fields.zip"
+    legacy = tmp_path / "legacy-state-fields.zip"
+    create_bundle(current, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(current) as src:
+        members = {name: src.read(name) for name in src.namelist()}
+
+    state = json.loads(members["evidence/state.json"])
+    state.pop("profile_fingerprint", None)
+    state.pop("epochs", None)
+    members["evidence/state.json"] = (
+        json.dumps(state, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"]["evidence/state.json"] = hashlib.sha256(
+        members["evidence/state.json"]
+    ).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    with zipfile.ZipFile(legacy, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name in sorted(members):
+            dst.writestr(name, members[name])
+
+    verified = verify_bundle(legacy)
+    assert verified["valid"] is True
+    assert verified["historical_epoch_count"] == 0
+    assert verified["historical_frames"] == 0
+
+
+def test_verify_rejects_epoch_that_is_not_older_than_active_profile(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    upgraded = _upgraded_profile()
+    EvidenceStateStore.open(
+        state_path,
+        upgraded,
+        allow_profile_rollover=True,
+    )
+
+    original = tmp_path / "valid-epoch.zip"
+    invalid = tmp_path / "invalid-epoch.zip"
+    create_bundle(original, upgraded, state_path=state_path)
+
+    with zipfile.ZipFile(original) as src:
+        members = {name: src.read(name) for name in src.namelist()}
+
+    state = json.loads(members["evidence/state.json"])
+    state["epochs"][0]["profile_version"] = upgraded["version"]
+    members["evidence/state.json"] = (
+        json.dumps(state, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"]["evidence/state.json"] = hashlib.sha256(
+        members["evidence/state.json"]
+    ).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    with zipfile.ZipFile(invalid, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for name in sorted(members):
+            dst.writestr(name, members[name])
+
+    with pytest.raises(BundleError, match="below active version"):
+        verify_bundle(invalid)
 
 
 def test_verify_rejects_tampered_member(tmp_path):
