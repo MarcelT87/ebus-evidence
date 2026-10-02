@@ -21,6 +21,7 @@ The test does not require:
 ## 1. Install
 
 ```bash
+cd ~
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
 
