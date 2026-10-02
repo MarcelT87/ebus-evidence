@@ -50,8 +50,8 @@ def _write_state(path):
     )
     update_state(state, _event())
     state["checkpoint"] = {
-        "device": 64518,
-        "inode": 393828,
+        "device": 1001,
+        "inode": 2002,
         "offset": 123456,
         "anchor_start": 123200,
         "anchor_sha256": "a" * 64,
