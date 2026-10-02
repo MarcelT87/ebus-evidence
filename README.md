@@ -149,7 +149,12 @@ For community review, submit the generated:
 data/evidence.zip
 ```
 
-through the repository's **Evidence submission** issue template.
+through the repository's **Evidence submission** issue form.
+
+The form has one required `.zip` upload field plus a small environment/privacy
+checklist. You do not need to copy verifier output into the issue: `export`
+already verifies the generated bundle, and maintainers should independently
+verify every submitted ZIP before trusting it.
 
 Do not attach the complete `ebusd.raw` file. The normal ZIP intentionally keeps
 the contribution small and excludes raw context by default.
@@ -234,7 +239,7 @@ The adapter transport used by ebusd is outside the evidence boundary.
 - **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** — Docker/native/remote layouts
 - **[System identity](docs/SYSTEM_IDENTITY.md)** — privacy-minimized hardware/firmware identity
 - **[Community test](docs/COMMUNITY_TEST.md)** — cross-installation contribution workflow
-- **[Submit evidence](docs/SUBMIT_EVIDENCE.md)** — attach a verified evidence ZIP for review
+- **[Submit evidence](docs/SUBMIT_EVIDENCE.md)** — upload a generated evidence ZIP through the structured public form
 - **[Bundle format v1](docs/BUNDLE_FORMAT.md)** — public ZIP/data contract for independent consumers
 - **[Home Assistant](docs/HOME_ASSISTANT.md)** — special file-based route for Home Assistant users
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** — symptom-based help
