@@ -113,9 +113,10 @@ If `python3 --version` is older than 3.11, install a newer Python version before
 
 ## 3. Install ebus-evidence
 
-Choose a directory where you want to keep the program, then run:
+A simple beginner-friendly location is your home directory:
 
 ```bash
+cd ~
 git clone https://github.com/MarcelT87/ebus-evidence.git
 cd ebus-evidence
 
@@ -415,25 +416,47 @@ Both `data/` and generated raw/ZIP artifacts are ignored by this repository's `.
 
 ---
 
-## 12. Create a shareable bundle
+## 12. Identify the system and create a shareable bundle
 
-State-only bundle:
+For cross-installation hardware/firmware comparison, add a structured system identity when an **existing** `ebusctl scan result` is already available.
 
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --output evidence.zip
+Do not run `ebusctl scan` or `ebusctl scan full` merely for this project.
+
+Follow [System identity](SYSTEM_IDENTITY.md) to create:
+
+```text
+data/system.json
 ```
 
-If context captures exist, their metadata can be included while raw context remains excluded by default:
+If no existing scan result is available, skip system identity for now. Evidence state is still valid without it.
+
+For the normal complete bundle:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --output evidence.zip
+  --system data/system.json \
+  --output data/evidence.zip
+```
+
+If you do not have `data/system.json`, omit the `--system` line.
+
+If there are no context captures yet, keeping `--context-dir data/contexts` is harmless when the directory exists; a state-only bundle is also valid.
+
+Raw context payloads are excluded by default. The bundle contains aggregate/state evidence and available context metadata without automatically publishing captured raw bus windows.
+
+Verify before sharing:
+
+```bash
+ebus-evidence verify data/evidence.zip
+```
+
+Expected:
+
+```text
+Status: VALID
 ```
 
 Only if you intentionally want reviewed raw context payloads inside the bundle:
@@ -443,23 +466,15 @@ ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
+  --system data/system.json \
   --include-context-raw \
-  --output evidence-with-context-raw.zip
+  --output data/evidence-with-context-raw.zip
 ```
 
-Before sharing:
+If you do not have `data/system.json`, again omit the `--system` line.
 
-```bash
-ebus-evidence verify evidence.zip
-```
+Review any explicitly included raw context before publishing it.
 
-Expected:
-
-```text
-Status: VALID
-```
-
-Raw context files are excluded by default. If you explicitly include them, they contain real eBUS payloads from a small time window and must be reviewed before publishing.
 
 ---
 
