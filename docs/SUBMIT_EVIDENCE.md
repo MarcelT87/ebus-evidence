@@ -28,7 +28,7 @@ Deterministic ....... yes
 Ready to share.
 ```
 
-You can verify it again explicitly:
+You can verify it again explicitly if you want:
 
 ```bash
 ./evidence verify data/evidence.zip
@@ -36,7 +36,11 @@ You can verify it again explicitly:
 
 Do not submit a bundle that reports `INVALID`.
 
-Paste the complete verifier output with the submission. Current bundles report runtime/profile provenance so maintainers can group evidence created by the same tool/profile bytes.
+You do **not** need to copy verifier output into the GitHub issue. `export`
+already verifies the generated ZIP, and maintainers must independently verify
+every public submission rather than trusting pasted text. Current bundles report
+runtime/profile provenance so maintainers can group evidence created by the
+same tool/profile bytes.
 
 ## 2. What to submit
 
@@ -63,23 +67,20 @@ timing is part of reproducible protocol evidence.
 
 ## 3. Open an Evidence submission issue
 
-Open a new GitHub issue and choose the **Evidence submission** template.
+Open a new GitHub issue and choose the **Evidence submission** form.
 
-Attach `data/evidence.zip` to the issue by dragging the ZIP into the issue
-text area.
+The form asks you to:
 
-Also paste the output of:
+1. upload `data/evidence.zip` in the required ZIP field;
+2. select the ebusd environment;
+3. select whether the evidence came from live `collect` or static `import`;
+4. optionally add the product/model and unusual collection details;
+5. confirm the short privacy checklist.
 
-```bash
-./evidence verify data/evidence.zip
-```
+No verifier-output copy/paste is required.
 
-Useful optional context:
-
-- system/product model if you know it;
-- ebusd environment: Docker, native Linux, or Home Assistant App/Add-on;
-- whether the bundle came from live `collect` or static `import`;
-- anything unusual that happened during collection.
+The upload field accepts ZIP files only. Attach the generated
+`data/evidence.zip`, not a renamed full raw log or another archive.
 
 Do not include IP addresses, usernames, passwords, tokens, Wi-Fi details,
 serial numbers or unrelated host configuration.
@@ -135,8 +136,8 @@ install
   -> doctor
   -> collect or import
   -> export
-  -> verify
-  -> attach data/evidence.zip to an Evidence submission issue
+  -> export verifies locally
+  -> upload data/evidence.zip in the Evidence submission form
 ```
 
 Related:
