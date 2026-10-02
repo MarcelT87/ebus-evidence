@@ -143,3 +143,23 @@ def test_verify_accepts_bundle_path():
         ["verify", "/tmp/evidence.zip"]
     )
     assert args.bundle == "/tmp/evidence.zip"
+
+
+def test_system_accepts_existing_scan_result_and_declared_product():
+    args = build_parser().parse_args(
+        [
+            "system",
+            "--scan-result",
+            "/tmp/scan-result.txt",
+            "--manufacturer",
+            "Vaillant",
+            "--model",
+            "105/6 A",
+            "--output",
+            "/tmp/system.json",
+        ]
+    )
+    assert args.scan_result == "/tmp/scan-result.txt"
+    assert args.manufacturer == "Vaillant"
+    assert args.model == "105/6 A"
+    assert args.output == "/tmp/system.json"
