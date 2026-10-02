@@ -218,7 +218,7 @@ def create_bundle(
     state_path: str | Path | None = None,
     context_dir: str | Path | None = None,
     system_path: str | Path | None = None,
-    include_context_raw: bool = True,
+    include_context_raw: bool = False,
 ) -> dict[str, Any]:
     if state_path is None and context_dir is None:
         raise BundleError("bundle requires --state, --context-dir, or both")
