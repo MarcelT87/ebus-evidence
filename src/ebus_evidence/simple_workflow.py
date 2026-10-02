@@ -410,6 +410,7 @@ def status(
 
     state_file = Path(state_path)
     state_has_observation = False
+    state_invalid = False
     rollover_pending = False
     if state_file.is_file():
         try:
@@ -421,6 +422,7 @@ def status(
                 f"(v{exc.current_version} -> v{exc.requested_version})"
             )
         except StateError as exc:
+            state_invalid = True
             print(f"Evidence state ...... invalid ({exc})")
         else:
             observation = store.state["observation"]
@@ -445,10 +447,12 @@ def status(
     contexts = Path(context_dir)
     current_context_count = 0
     historical_context_count = 0
+    context_invalid = False
     if contexts.is_dir():
         try:
             context_scope = context_metadata_scope(contexts, profile)
         except ContextError as exc:
+            context_invalid = True
             print(f"Context metadata .... invalid ({exc})")
         else:
             current_context_count = len(context_scope.current)
@@ -476,7 +480,12 @@ def status(
     else:
         print("System identity ..... absent (optional)")
 
-    ready = (state_has_observation or current_context_count > 0) and not rollover_pending
+    ready = (
+        (state_has_observation or current_context_count > 0)
+        and not rollover_pending
+        and not state_invalid
+        and not context_invalid
+    )
     print()
     print(f"Ready to export ..... {'YES' if ready else 'NO'}")
     if ready:
