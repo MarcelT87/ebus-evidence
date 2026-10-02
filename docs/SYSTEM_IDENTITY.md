@@ -70,7 +70,7 @@ The generated `data/system.json` retains only address, manufacturer, device ID, 
 Example (replace the placeholders with product information you actually know):
 
 ```bash
-ebus-evidence system \
+./evidence system \
   --scan-result data/scan-result.txt \
   --manufacturer "YOUR-MANUFACTURER" \
   --model "YOUR-MODEL" \
@@ -113,21 +113,17 @@ The signature is intended for grouping comparable systems. It is not a personal 
 
 ## 4. Include it in an evidence bundle
 
-Once you also have evidence state/context:
+Once you also have persistent evidence state from `./evidence collect`,
+the beginner export automatically includes a valid `data/system.json`:
 
 ```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --system data/system.json \
-  --output data/evidence.zip
+./evidence export
 ```
 
-Verify:
+The export command creates and immediately verifies `data/evidence.zip`.
 
-```bash
-ebus-evidence verify data/evidence.zip
-```
+Experienced users can still use explicit `ebus-evidence bundle` and
+`ebus-evidence verify` commands when custom paths/options are required.
 
 The verifier checks that:
 
