@@ -67,7 +67,8 @@ common input is normal message-mode raw logging.
 ./evidence collect
 ```
 
-Collection is passive and read-only. Stop with `Ctrl-C`.
+Collection is passive and read-only. There is no normal collection timer; it
+keeps following new raw-log records until you stop it with `Ctrl-C`.
 
 The beginner command automatically uses:
 
