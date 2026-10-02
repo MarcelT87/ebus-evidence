@@ -87,7 +87,8 @@ def test_export_requires_collected_evidence(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["export"]) == 2
     out = capsys.readouterr().out
-    assert "hint: run './evidence collect' first" in out
+    assert "./evidence collect" in out
+    assert "./evidence import --raw FILE" in out
     assert not (tmp_path / "data" / "evidence.zip").exists()
 
 
@@ -103,7 +104,8 @@ def test_export_refuses_zero_frame_state(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
     assert main(["export"]) == 2
     out = capsys.readouterr().out
-    assert "run './evidence collect' while the raw log is growing" in out
+    assert "./evidence collect" in out
+    assert "./evidence import --raw FILE" in out
     assert not (tmp_path / "data" / "evidence.zip").exists()
 
 
