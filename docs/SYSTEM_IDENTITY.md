@@ -29,16 +29,22 @@ If your ebusd installation has no existing scan result, skip system identity for
 
 ## 1. Save the existing scan result
 
-On a system where `ebusctl` is already configured to talk to your normal ebusd instance:
+When working inside the `ebus-evidence` checkout, keep local input under `data/`. That directory is ignored by Git.
 
 ```bash
-ebusctl scan result > scan-result.txt
+mkdir -p data
+```
+
+On a system where `ebusctl` is already configured to talk to your normal ebusd instance, save the **existing** scan result:
+
+```bash
+ebusctl scan result > data/scan-result.txt
 ```
 
 Review the file before continuing:
 
 ```bash
-cat scan-result.txt
+cat data/scan-result.txt
 ```
 
 A normal line starts with fields such as:
@@ -55,6 +61,8 @@ address ; manufacturer ; device id ; software version ; hardware version
 
 Additional scan columns are deliberately ignored by `ebus-evidence`.
 
+The generated `data/system.json` retains only address, manufacturer, device ID, software version and hardware version from each scan line. Do not manually copy extra scan columns into the system document.
+
 ---
 
 ## 2. Create system.json
@@ -63,10 +71,10 @@ Example for a user-declared Vaillant 105/6 A:
 
 ```bash
 ebus-evidence system \
-  --scan-result scan-result.txt \
+  --scan-result data/scan-result.txt \
   --manufacturer Vaillant \
   --model "105/6 A" \
-  --output system.json
+  --output data/system.json
 ```
 
 This writes a privacy-minimized document containing only:
@@ -111,7 +119,7 @@ Once you also have evidence state/context:
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
-  --system system.json \
+  --system data/system.json \
   --output evidence.zip
 ```
 
