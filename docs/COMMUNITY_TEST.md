@@ -80,28 +80,66 @@ Stop with Ctrl-C.
 
 The bundled HW5103 profile currently captures context only for explicitly configured rare non-zero HMU `/a80e` or `/ba08` observations.
 
-## 5. Create a shareable bundle
+## 5. Identify the system
 
-With both state and context directory:
+For hardware/firmware comparison, prefer the structured [System identity](SYSTEM_IDENTITY.md) workflow when an existing `ebusctl scan result` is available.
+
+Keep the input and generated identity under the ignored local `data/` directory:
+
+```bash
+mkdir -p data
+
+ebus-evidence system \
+  --scan-result data/scan-result.txt \
+  --manufacturer Vaillant \
+  --model "105/6 A" \
+  --output data/system.json
+```
+
+Replace the example manufacturer/model with the product information that is actually known for the installation.
+
+This command does not start a scan. It reads the supplied file and keeps only address/manufacturer/device ID/SW/HW from each scan line.
+
+If no existing scan result is available, do **not** trigger a new scan merely for this project. Skip `--system` in the bundle step.
+
+Useful additional human-supplied context can still include:
+
+```text
+heat-pump / boiler family:
+controller:
+ebusd version:
+configuration source/version:
+whether raw timestamps are UTC or local time:
+rough observation duration:
+```
+
+Do not include passwords, access tokens, network addresses or unrelated Home Assistant configuration.
+
+## 6. Create a shareable bundle
+
+Normal complete bundle when `data/system.json` exists:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --output evidence.zip
+  --system data/system.json \
+  --output data/evidence.zip
 ```
 
-If there are no context captures yet, a state-only bundle is valid:
+If no system identity is available, omit the `--system data/system.json` line.
+
+Raw context payloads are excluded by default. Context metadata can still be included.
+
+A state-only bundle is valid when no context directory is being used:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
-  --output evidence.zip
+  --output data/evidence.zip
 ```
-
-Raw context payloads are excluded by default. The normal command above already creates the safer metadata/aggregate bundle.
 
 Only if you intentionally want to include reviewed raw context payloads:
 
@@ -110,14 +148,17 @@ ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
+  --system data/system.json \
   --include-context-raw \
-  --output evidence-with-context-raw.zip
+  --output data/evidence-with-context-raw.zip
 ```
 
-## 6. Verify before sharing
+Again, omit the `--system` line if no system identity exists.
+
+## 7. Verify before sharing
 
 ```bash
-ebus-evidence verify evidence.zip
+ebus-evidence verify data/evidence.zip
 ```
 
 Expected:
@@ -132,7 +173,7 @@ A bundle created directly by the tool should also report:
 Deterministic layout: yes
 ```
 
-## 7. Privacy review
+## 8. Privacy review
 
 The bundle exporter deliberately omits local resume metadata and does not add:
 
@@ -143,52 +184,11 @@ The bundle exporter deliberately omits local resume metadata and does not add:
 - credentials;
 - full long-running raw logs.
 
-If small context `.raw` files are present, they contain actual eBUS payloads from the bounded trigger window. Review them before posting publicly.
+The generated system identity contains only the approved technical identity fields plus the optional user-declared product manufacturer/model and the topology signature.
+
+If small context `.raw` files are explicitly included, they contain actual eBUS payloads from the bounded trigger window. Review them before posting publicly.
 
 For the first public exchange, use the default bundle behavior. Raw context is excluded unless `--include-context-raw` is explicitly supplied.
-
-## 8. Identify the system
-
-For hardware/firmware comparison, prefer the structured [System identity](SYSTEM_IDENTITY.md) workflow when an existing `ebusctl scan result` is available.
-
-Example:
-
-```bash
-mkdir -p data
-
-ebus-evidence system \
-  --scan-result data/scan-result.txt \
-  --manufacturer Vaillant \
-  --model "105/6 A" \
-  --output data/system.json
-```
-
-This does not start a scan. It keeps only address/manufacturer/device ID/SW/HW and ignores additional scan columns. Keep the copied scan-result input and generated system identity under `data/`; that directory is ignored by Git.
-
-Include it in the bundle with:
-
-```bash
-ebus-evidence bundle \
-  --profile hw5103-open-evidence \
-  --state data/evidence-state.json \
-  --system data/system.json \
-  --output evidence.zip
-```
-
-If no existing scan result is available, do not trigger a new scan merely for this project. Report only the installation details you already know.
-
-Useful additional human-supplied context:
-
-```text
-heat-pump / boiler family:
-controller:
-ebusd version:
-configuration source/version:
-whether raw timestamps are UTC or local time:
-rough observation duration:
-```
-
-Do not include passwords, access tokens, network addresses or unrelated Home Assistant configuration.
 
 ## 9. Observation scope
 
