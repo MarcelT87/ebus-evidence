@@ -234,6 +234,8 @@ def _analyze(args: argparse.Namespace) -> int:
         exported = shareable_report(report)
         output.write_text(json.dumps(exported, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"JSON report: {output}")
+        print("Absolute timestamps: yes (evidence times are exported)")
+        print("Absolute raw-log path: no")
     return 0
 
 
