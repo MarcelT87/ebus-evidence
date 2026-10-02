@@ -98,6 +98,24 @@ This repository is authoritative for the public tool's:
 External/private project documentation may describe how this tool is used in a
 larger research workflow, but it does not override this repository.
 
+## No handoff files in this public repository
+
+This repository must not contain chat handoffs, internal project-status
+snapshots, private planning notes, cross-project coordination files or local
+validation handoffs.
+
+If a maintainer/chat receives such a handoff:
+
+1. treat it only as private source/context;
+2. do not commit the handoff itself here;
+3. do not copy private/local details into public docs;
+4. if the handoff reveals a real public-tool issue, implement only the
+   sanitized code/test/documentation change that belongs to this repository;
+5. keep private coordination/history in the private research project instead.
+
+This rule also applies when a handoff describes this public tool accurately.
+Correctness does not make an internal handoff public documentation.
+
 ## Handoff rule
 
 A new maintainer/chat working on `ebus-evidence` should:
