@@ -101,15 +101,17 @@ ebus-evidence bundle \
   --output evidence.zip
 ```
 
-For metadata/aggregates without raw context payloads:
+Raw context payloads are excluded by default. The normal command above already creates the safer metadata/aggregate bundle.
+
+Only if you intentionally want to include reviewed raw context payloads:
 
 ```bash
 ebus-evidence bundle \
   --profile hw5103-open-evidence \
   --state data/evidence-state.json \
   --context-dir data/contexts \
-  --no-context-raw \
-  --output evidence-metadata.zip
+  --include-context-raw \
+  --output evidence-with-context-raw.zip
 ```
 
 ## 6. Verify before sharing
@@ -143,7 +145,7 @@ The bundle exporter deliberately omits local resume metadata and does not add:
 
 If small context `.raw` files are present, they contain actual eBUS payloads from the bounded trigger window. Review them before posting publicly.
 
-For the most conservative first exchange, use `--no-context-raw`.
+For the first public exchange, use the default bundle behavior. Raw context is excluded unless `--include-context-raw` is explicitly supplied.
 
 ## 8. Identify the system
 
