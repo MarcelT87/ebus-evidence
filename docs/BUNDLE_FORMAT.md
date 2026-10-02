@@ -36,13 +36,20 @@ The default `./evidence export` path excludes `contexts/*.raw`.
 A bundle that verifies as `VALID` proves that:
 
 - the ZIP structure is accepted by the v1 verifier;
-- required members and internal schemas are consistent;
+- required members and the schema checks implemented by that verifier pass;
 - every member covered by `checksums.json` matches its recorded SHA-256;
-- profile/state/context/system references are internally consistent;
-- the verifier's privacy and path-safety rules are satisfied.
+- the cross-member invariants checked by the verifier are consistent;
+- the verifier's path-safety checks pass;
+- the manifest contains the privacy declarations required by bundle v1.
 
 `VALID` does **not** prove who created the bundle and is not a cryptographic
 signature of the submitting person, installation or official repository build.
+
+It also does **not** perform a generic secret/IP/path scan across every arbitrary
+text value in the archive. The official exporter minimizes shareable data by
+construction and several typed members use strict allowlists, but a manually
+constructed conforming bundle must still be treated as untrusted submitted
+content.
 
 A technically capable third party can construct a conforming bundle.
 
@@ -361,7 +368,7 @@ If any context raw members are present:
 
 ## Privacy contract
 
-Current normal bundle creation asserts:
+The current official exporter creates a manifest asserting:
 
 ```text
 absolute host paths          excluded
@@ -372,6 +379,11 @@ full raw log                excluded
 raw context                  excluded by default
 absolute timestamps          included
 ```
+
+The verifier requires the relevant v1 manifest flags to have the expected
+values and applies strict allowlists to members such as `system.json`.
+Those checks are not a universal content scanner for every free-form string in
+a manually constructed bundle.
 
 Raw context is included only after an explicit request such as:
 
@@ -394,11 +406,13 @@ An independent consumer should:
 2. validate ZIP/member safety before extracting anything;
 3. verify `checksums.json`;
 4. validate `manifest.json`, the embedded profile and all present typed
-   members;
-5. compute and retain the complete bundle SHA-256 as provenance;
-6. never execute content from a submitted bundle;
-7. preserve the original ZIP unchanged;
-8. keep semantic interpretation separate from structural validation.
+   members according to the consumer's supported contract;
+5. apply any additional local submission/privacy policy needed for untrusted
+   third-party content;
+6. compute and retain the complete bundle SHA-256 as provenance;
+7. never execute content from a submitted bundle;
+8. preserve the original ZIP unchanged;
+9. keep semantic interpretation separate from structural validation.
 
 Consumers do not need to extract the ZIP to disk. Reading validated members
 directly from the archive is preferable when practical.
