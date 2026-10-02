@@ -122,10 +122,28 @@ def test_bundle_accepts_state_context_and_output():
     assert args.context_dir == "/tmp/contexts"
     assert args.system == "/tmp/system.json"
     assert args.output == "/tmp/evidence.zip"
+    assert args.include_context_raw is False
     assert args.no_context_raw is False
 
 
-def test_bundle_can_disable_context_raw():
+def test_bundle_can_explicitly_include_context_raw():
+    args = build_parser().parse_args(
+        [
+            "bundle",
+            "--profile",
+            "hw5103-open-evidence",
+            "--context-dir",
+            "/tmp/contexts",
+            "--include-context-raw",
+            "--output",
+            "/tmp/evidence.zip",
+        ]
+    )
+    assert args.include_context_raw is True
+    assert args.no_context_raw is False
+
+
+def test_bundle_accepts_legacy_no_context_raw_flag():
     args = build_parser().parse_args(
         [
             "bundle",
