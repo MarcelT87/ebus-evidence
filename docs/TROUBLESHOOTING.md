@@ -1,68 +1,78 @@
 # Troubleshooting
 
-This guide starts from the **symptom you can see** and works toward the likely cause.
+This guide starts from the **symptom you can see** and works toward the likely
+cause.
 
-`ebus-evidence` is designed to be read-only. Troubleshooting should not require changing heating parameters or actively probing unknown eBUS registers.
+`ebus-evidence` is designed to be read-only. Troubleshooting should not
+require changing heating parameters or actively probing unknown eBUS registers.
+
+## Fast path
+
+For the normal beginner workflow, start with the matching step:
+
+```text
+installation / launcher problem -> bash install.sh
+raw-log / ebusd problem          -> ./evidence doctor
+collection / resume problem      -> ./evidence status
+ZIP/export problem               -> ./evidence export
+existing ZIP verification        -> ./evidence verify FILE.zip
+```
+
+The detailed reference below keeps the explicit expert commands as well.
 
 ---
 
-# 1. `ebus-evidence: command not found`
+# 1. `./evidence` is missing or not executable
 
-Most likely the virtual environment is not active.
+From the repository directory run:
 
-From the repository directory:
+```bash
+bash install.sh
+```
+
+Then:
+
+```bash
+./evidence --version
+```
+
+The bootstrap installer creates/reuses `.venv`, installs the current checkout
+and marks the local launcher executable.
+
+If you prefer the explicit Python environment:
 
 ```bash
 source .venv/bin/activate
-```
-
-Then check:
-
-```bash
 ebus-evidence --version
 ```
 
-If the command is still missing, reinstall the project into the active environment:
-
-```bash
-python -m pip install -e .
-```
-
-Check where the command comes from:
-
-```bash
-which ebus-evidence
-```
-
-It should normally point into the repository's `.venv/bin/` directory.
-
-On Windows PowerShell:
+On Windows PowerShell, where the local shell launcher is not the primary path:
 
 ```powershell
 .venv\Scripts\Activate.ps1
+ebus-evidence --version
 ```
 
 ---
 
-# 1A. `.venv/bin/activate` does not exist
+# 1A. `.venv` does not exist
 
-If you see:
-
-```text
-bash: .venv/bin/activate: No such file or directory
-bash: python: command not found
-```
-
-check the system Python first:
+Check the system Python first:
 
 ```bash
 python3 --version
 command -v python3
 ```
 
-`ebus-evidence` currently requires Python 3.11 or newer.
+`ebus-evidence` requires Python 3.11 or newer.
 
-If Python 3.11+ is available but `.venv` is missing:
+Normally just rerun:
+
+```bash
+bash install.sh
+```
+
+For manual setup:
 
 ```bash
 python3 -m venv .venv
@@ -70,13 +80,12 @@ source .venv/bin/activate
 python -m pip install -e .
 ```
 
-On Debian/Ubuntu, if creating the virtual environment reports that `venv` or `ensurepip` is unavailable, install the distribution's Python venv package first, commonly:
+On Debian/Ubuntu, if creating the virtual environment reports that `venv` or
+`ensurepip` is unavailable:
 
 ```bash
 sudo apt install python3-venv
 ```
-
-Do not replace `python3` with `python` until the virtual environment has been activated. Many Linux systems provide `python3` but no global `python` command.
 
 ---
 
