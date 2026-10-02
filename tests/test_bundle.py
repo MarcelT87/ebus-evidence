@@ -71,7 +71,7 @@ def _write_system(path):
     document = build_system_document(
         devices,
         declared_manufacturer="Vaillant",
-        declared_model="105/6 A",
+        declared_model="TEST-MODEL",
     )
     path.write_text(
         json.dumps(document, indent=2, sort_keys=True) + "\n",
