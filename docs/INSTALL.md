@@ -298,6 +298,17 @@ ebus-evidence doctor \
 
 ## 8. Run the first analysis
 
+### Before you interpret the result
+
+The current bundled profile, `hw5103-open-evidence`, is **Vaillant-family specific** and comes from the project's current Vaillant/HW5103 research work.
+
+This distinction matters:
+
+- the raw-log parser is not designed only for one Vaillant installation;
+- the bundled evidence checks **are** currently targeted at that Vaillant research scope;
+- zero matches on another manufacturer are therefore not evidence that ebusd or the parser is broken;
+- support for additional manufacturers should be added through separate evidence profiles rather than by guessing meanings from the Vaillant profile.
+
 When automatic discovery works:
 
 ```bash
