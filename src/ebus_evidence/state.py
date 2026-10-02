@@ -20,6 +20,19 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+
+def _new_observation() -> dict[str, Any]:
+    return {
+        "frames_seen": 0,
+        "passive_frames": 0,
+        "ebusd_initiated_frames": 0,
+        "non_frames": 0,
+        "skipped": 0,
+        "first_frame_timestamp": None,
+        "last_frame_timestamp": None,
+    }
+
+
 def _new_check(check: dict[str, Any]) -> dict[str, Any]:
     return {
         "description": check.get("description", check["id"]),
@@ -46,6 +59,7 @@ def new_state(profile: dict[str, Any]) -> dict[str, Any]:
         "created_at": now,
         "updated_at": now,
         "total_events": 0,
+        "observation": _new_observation(),
         "checkpoint": None,
         "continuity": {
             "resets": [],
@@ -71,6 +85,31 @@ def _validate_state(state: dict[str, Any], profile: dict[str, Any]) -> None:
         )
     if not isinstance(state.get("checks"), dict):
         raise StateError("state checks must be a mapping")
+
+    observation = state.get("observation")
+    if not isinstance(observation, dict):
+        raise StateError("state observation must be a mapping")
+    for key in (
+        "frames_seen",
+        "passive_frames",
+        "ebusd_initiated_frames",
+        "non_frames",
+        "skipped",
+    ):
+        value = observation.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise StateError(f"state observation {key} must be a non-negative integer")
+    if (
+        observation["passive_frames"] + observation["ebusd_initiated_frames"]
+        != observation["frames_seen"]
+    ):
+        raise StateError(
+            "state observation passive/initiated frame counts must sum to frames_seen"
+        )
+    for key in ("first_frame_timestamp", "last_frame_timestamp"):
+        value = observation.get(key)
+        if value is not None and not isinstance(value, dict):
+            raise StateError(f"state observation {key} must be a mapping or null")
 
     checkpoint = state.get("checkpoint")
     if checkpoint is not None:
@@ -110,6 +149,7 @@ def load_state(path: str | Path, profile: dict[str, Any]) -> dict[str, Any]:
 
     # Backward-compatible additions to state-v1.
     data.setdefault("checkpoint", None)
+    data.setdefault("observation", _new_observation())
     data.setdefault("continuity", {"resets": []})
     if not isinstance(data["continuity"], dict):
         raise StateError("state continuity must be a mapping")
@@ -124,6 +164,36 @@ def load_state(path: str | Path, profile: dict[str, Any]) -> dict[str, Any]:
     for check in profile["checks"]:
         data["checks"].setdefault(check["id"], _new_check(check))
     return data
+
+
+def update_observation_frame(
+    state: dict[str, Any],
+    timestamp: dict[str, Any],
+    *,
+    initiated_by_ebusd: bool,
+) -> None:
+    observation = state["observation"]
+    copied_timestamp = deepcopy(timestamp)
+    observation["frames_seen"] += 1
+    if initiated_by_ebusd:
+        observation["ebusd_initiated_frames"] += 1
+    else:
+        observation["passive_frames"] += 1
+    observation["first_frame_timestamp"] = (
+        observation["first_frame_timestamp"] or copied_timestamp
+    )
+    observation["last_frame_timestamp"] = copied_timestamp
+    state["updated_at"] = _utc_now()
+
+
+def update_observation_non_frame(state: dict[str, Any]) -> None:
+    state["observation"]["non_frames"] += 1
+    state["updated_at"] = _utc_now()
+
+
+def update_observation_skip(state: dict[str, Any]) -> None:
+    state["observation"]["skipped"] += 1
+    state["updated_at"] = _utc_now()
 
 
 def update_state(state: dict[str, Any], event: dict[str, Any]) -> None:
@@ -211,6 +281,31 @@ class EvidenceStateStore:
 
     def add(self, event: dict[str, Any], *, save: bool = True) -> None:
         update_state(self.state, event)
+        if save:
+            self.save()
+
+    def observe_frame(
+        self,
+        timestamp: dict[str, Any],
+        *,
+        initiated_by_ebusd: bool,
+        save: bool = True,
+    ) -> None:
+        update_observation_frame(
+            self.state,
+            timestamp,
+            initiated_by_ebusd=initiated_by_ebusd,
+        )
+        if save:
+            self.save()
+
+    def observe_non_frame(self, *, save: bool = True) -> None:
+        update_observation_non_frame(self.state)
+        if save:
+            self.save()
+
+    def observe_skip(self, *, save: bool = True) -> None:
+        update_observation_skip(self.state)
         if save:
             self.save()
 
