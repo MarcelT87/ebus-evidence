@@ -111,6 +111,8 @@ def test_bundle_accepts_state_context_and_output():
             "/tmp/state.json",
             "--context-dir",
             "/tmp/contexts",
+            "--system",
+            "/tmp/system.json",
             "--output",
             "/tmp/evidence.zip",
         ]
@@ -118,6 +120,7 @@ def test_bundle_accepts_state_context_and_output():
     assert args.profile == "hw5103-open-evidence"
     assert args.state == "/tmp/state.json"
     assert args.context_dir == "/tmp/contexts"
+    assert args.system == "/tmp/system.json"
     assert args.output == "/tmp/evidence.zip"
     assert args.no_context_raw is False
 
