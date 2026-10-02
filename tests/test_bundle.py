@@ -6,6 +6,7 @@ import pytest
 
 from ebus_evidence.bundle import BundleError, create_bundle, shared_state, verify_bundle
 from ebus_evidence.state import new_state, save_state, update_state
+from ebus_evidence.system_identity import build_system_document, parse_scan_result
 
 
 PROFILE = {
@@ -50,6 +51,23 @@ def _write_state(path):
     )
     save_state(path, state)
     return state
+
+
+def _write_system(path):
+    devices = parse_scan_result(
+        "08;Vaillant;HMU00;0902;5103;ignored;private-extra\n"
+        "15;Vaillant;CTLV2;0515;1104;ignored-too\n"
+    )
+    document = build_system_document(
+        devices,
+        declared_manufacturer="Vaillant",
+        declared_model="105/6 A",
+    )
+    path.write_text(
+        json.dumps(document, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return document
 
 
 def _write_context(directory):
@@ -323,4 +341,50 @@ def test_bundle_rejects_context_raw_filename_traversal(tmp_path):
             PROFILE,
             context_dir=context_dir,
             include_context_raw=False,
+        )
+
+
+def test_bundle_can_include_validated_system_identity(tmp_path):
+    state_path = tmp_path / "state.json"
+    system_path = tmp_path / "system.json"
+    _write_state(state_path)
+    expected_system = _write_system(system_path)
+
+    output = tmp_path / "with-system.zip"
+    create_bundle(
+        output,
+        PROFILE,
+        state_path=state_path,
+        system_path=system_path,
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        assert "system.json" in archive.namelist()
+        bundled_system = json.loads(archive.read("system.json"))
+        assert bundled_system == expected_system
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["system_identity_included"] is True
+
+    verified = verify_bundle(output)
+    assert verified["system_identity_included"] is True
+    assert (
+        verified["topology_signature_sha256"]
+        == expected_system["topology_signature_sha256"]
+    )
+
+
+def test_bundle_rejects_system_identity_with_unapproved_device_field(tmp_path):
+    state_path = tmp_path / "state.json"
+    system_path = tmp_path / "system.json"
+    _write_state(state_path)
+    document = _write_system(system_path)
+    document["devices"][0]["serial"] = "must-not-be-shared"
+    system_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(BundleError, match="address/manufacturer/id/sw/hw"):
+        create_bundle(
+            tmp_path / "invalid-system.zip",
+            PROFILE,
+            state_path=state_path,
+            system_path=system_path,
         )
