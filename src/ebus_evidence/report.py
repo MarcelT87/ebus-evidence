@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from copy import deepcopy
 from typing import Any, Iterable
 
 from ebus_evidence.decoders import DecodeError, decode_value
@@ -11,6 +12,14 @@ from ebus_evidence.timeutil import normalize_timestamp
 
 _MAX_VARIANTS = 20
 _MAX_DISTINCT_VALUES = 256
+
+
+def shareable_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-safe report without local absolute source paths."""
+    exported = deepcopy(report)
+    exported.pop("raw_path", None)
+    exported["privacy"] = {"absolute_paths_included": False}
+    return exported
 
 
 def _new_state(check: dict[str, Any]) -> dict[str, Any]:
