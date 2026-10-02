@@ -16,7 +16,7 @@ from ebus_evidence.input.raw_file import (
     split_records,
 )
 from ebus_evidence.profiles.loader import ProfileError, load_profile
-from ebus_evidence.report import analyze_frames, format_text
+from ebus_evidence.report import analyze_frames, format_text, shareable_report
 from ebus_evidence.timeutil import TimezoneError, get_timezone
 from ebus_evidence.state import EvidenceStateStore, StateError
 from ebus_evidence.system_identity import SystemIdentityError, create_system_document
@@ -231,7 +231,8 @@ def _analyze(args: argparse.Namespace) -> int:
 
     if args.json:
         output = Path(args.json)
-        output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        exported = shareable_report(report)
+        output.write_text(json.dumps(exported, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"JSON report: {output}")
     return 0
 
