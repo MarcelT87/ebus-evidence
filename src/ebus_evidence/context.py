@@ -18,6 +18,68 @@ class ContextError(ValueError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class ContextMetadataScope:
+    current: tuple[Path, ...]
+    historical: tuple[Path, ...]
+
+
+def context_metadata_scope(
+    output_dir: str | Path,
+    profile: dict[str, Any],
+) -> ContextMetadataScope:
+    directory = Path(output_dir)
+    if not directory.exists():
+        return ContextMetadataScope(current=(), historical=())
+    if not directory.is_dir():
+        raise ContextError(f"context path is not a directory: {directory}")
+
+    profile_name = profile["name"]
+    profile_version = profile.get("version", 1)
+    current: list[Path] = []
+    historical: list[Path] = []
+
+    for metadata_path in sorted(directory.glob("*.json"), key=lambda path: path.name):
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ContextError(
+                f"cannot read context metadata {metadata_path.name}: {exc}"
+            ) from exc
+
+        if (
+            not isinstance(metadata, dict)
+            or metadata.get("format") != _CONTEXT_FORMAT
+        ):
+            raise ContextError(
+                f"unsupported context metadata: {metadata_path.name}"
+            )
+        if metadata.get("profile") != profile_name:
+            raise ContextError(
+                f"context profile mismatch in {metadata_path.name}: "
+                f"{metadata.get('profile')!r} != {profile_name!r}"
+            )
+        version = metadata.get("profile_version")
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise ContextError(
+                f"context profile version is invalid in {metadata_path.name}"
+            )
+        if version == profile_version:
+            current.append(metadata_path)
+        elif version < profile_version:
+            historical.append(metadata_path)
+        else:
+            raise ContextError(
+                f"context profile version is newer than active profile in "
+                f"{metadata_path.name}: v{version} > v{profile_version}"
+            )
+
+    return ContextMetadataScope(
+        current=tuple(current),
+        historical=tuple(historical),
+    )
+
+
 def record_datetime(record: bytes) -> datetime | None:
     if len(record) < 23:
         return None
