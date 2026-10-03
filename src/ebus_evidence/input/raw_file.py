@@ -195,12 +195,17 @@ def split_record_buffer(buffer: bytes, *, flush: bool = False) -> tuple[list[byt
     return records, tail
 
 
-def split_records(path: str | Path, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
+def split_records(
+    path: str | Path,
+    chunk_size: int = 1024 * 1024,
+    *,
+    max_record_bytes: int = MAX_RAW_RECORD_BYTES,
+) -> Iterator[bytes]:
     """Yield timestamp-delimited records from a raw-log file with bounded memory."""
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than zero")
 
-    splitter = RawRecordSplitter()
+    splitter = RawRecordSplitter(max_record_bytes=max_record_bytes)
     with Path(path).open("rb") as handle:
         while chunk := handle.read(chunk_size):
             yield from splitter.feed(chunk)
