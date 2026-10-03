@@ -521,6 +521,50 @@ Absolute timestamps remain part of v1 evidence because timing is useful for
 reproducibility and correlation. Their presence is explicitly disclosed by
 current manifests and verifier output.
 
+## Public submission policy
+
+Structural bundle validity and public submission acceptance are deliberately
+separate decisions.
+
+The normal verifier remains format-focused:
+
+```bash
+./evidence verify evidence.zip
+```
+
+Maintainers reviewing untrusted public uploads should use:
+
+```bash
+./evidence verify --submission evidence.zip
+```
+
+The stricter submission policy currently requires:
+
+- compressed ZIP size at or below 25 MiB;
+- at most 1000 archive members;
+- at most 64 MiB total uncompressed content;
+- no encrypted ZIP members;
+- no raw `contexts/*.raw` members;
+- an included evidence state;
+- current runtime/profile provenance;
+- explicit absolute-timestamp disclosure;
+- deterministic exporter layout;
+- at least some observed evidence;
+- an embedded profile that exactly matches the currently bundled trusted
+  profile name/version/content.
+
+The policy performs its tighter archive preflight before the full bundle
+verification so obviously oversized or raw-context submissions can be rejected
+without first processing their complete contents.
+
+These rules are an acceptance policy for normal public contributions, not a new
+bundle-format version. A bundle may remain structurally valid under bundle v1
+while being unsuitable for normal public submission.
+
+A successful submission-policy result is still **not** an authenticity proof.
+A contributor can fabricate observations that satisfy the public data contract.
+Human research review and cross-installation comparison remain necessary.
+
 ## Consumer guidance
 
 An independent consumer should:
@@ -567,18 +611,26 @@ binary.
 
 ## Reference implementation
 
-The current reference implementation and verifier live in:
+The current reference format verifier lives in:
 
 ```text
 src/ebus_evidence/bundle.py
 ```
 
-The reference verifier remains authoritative for the exact acceptance behavior
-of the current release line.
+The additional public-submission acceptance policy lives in:
+
+```text
+src/ebus_evidence/submission.py
+```
+
+The format verifier remains authoritative for bundle-v1 structural acceptance;
+the submission module intentionally layers stricter public-contribution policy
+on top.
 
 Related documentation:
 
 - [Installation and first run](INSTALL.md)
 - [Submit evidence](SUBMIT_EVIDENCE.md)
+- [Review public submissions](MAINTAINER_SUBMISSIONS.md)
 - [System identity](SYSTEM_IDENTITY.md)
 - [Project boundaries](PROJECT_BOUNDARIES.md)
