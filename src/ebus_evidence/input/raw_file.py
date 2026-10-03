@@ -15,6 +15,11 @@ _RECORD_RE = re.compile(
 )
 _SEGMENT_RE = re.compile(r"([<>])([0-9a-fA-F]+)")
 
+MAX_RAW_RECORD_BYTES = 1024 * 1024
+RAW_READ_CHUNK_BYTES = 64 * 1024
+_RECORD_BOUNDARY_OVERLAP_BYTES = 64
+_OVERSIZE_RECORD_MARKER = b"__EBUS_EVIDENCE_OVERSIZED_RAW_RECORD__"
+
 
 class RawParseError(ValueError):
     pass
@@ -67,6 +72,103 @@ def resolve_raw_sources(path: str | Path, include_rotated: bool = False) -> list
     return sources
 
 
+class RawRecordSplitter:
+    """Incrementally split raw records with bounded pending memory.
+
+    Normal eBUS message-mode records are tiny. A corrupt input that never
+    provides the next timestamp delimiter must not make the pending buffer grow
+    without bound. Records exceeding the configured safety limit are represented
+    by one small internal marker and skipped by the normal parser.
+    """
+
+    def __init__(self, *, max_record_bytes: int = MAX_RAW_RECORD_BYTES):
+        if max_record_bytes <= 0:
+            raise ValueError("max_record_bytes must be greater than zero")
+        self.max_record_bytes = max_record_bytes
+        self._buffer = b""
+        self._discarding_oversize = False
+
+    @property
+    def pending(self) -> bytes:
+        return self._buffer
+
+    @property
+    def pending_bytes(self) -> int:
+        return len(self._buffer)
+
+    @property
+    def discarding_oversize(self) -> bool:
+        return self._discarding_oversize
+
+    def reset(self) -> None:
+        self._buffer = b""
+        self._discarding_oversize = False
+
+    def _retain_boundary_overlap(self) -> None:
+        if len(self._buffer) > _RECORD_BOUNDARY_OVERLAP_BYTES:
+            self._buffer = self._buffer[-_RECORD_BOUNDARY_OVERLAP_BYTES:]
+
+    def feed(self, data: bytes, *, flush: bool = False) -> list[bytes]:
+        if data:
+            self._buffer += data
+
+        records: list[bytes] = []
+
+        while True:
+            starts = [
+                match.start()
+                for match in _RECORD_START_RE.finditer(self._buffer)
+            ]
+
+            if self._discarding_oversize:
+                if starts:
+                    self._buffer = self._buffer[starts[0] :]
+                    self._discarding_oversize = False
+                    continue
+                if flush:
+                    self.reset()
+                else:
+                    self._retain_boundary_overlap()
+                break
+
+            if not starts:
+                if flush:
+                    self._buffer = b""
+                else:
+                    self._retain_boundary_overlap()
+                break
+
+            if starts[0] > 0:
+                self._buffer = self._buffer[starts[0] :]
+                continue
+
+            if len(starts) >= 2:
+                end = starts[1]
+                if end > self.max_record_bytes:
+                    records.append(_OVERSIZE_RECORD_MARKER)
+                else:
+                    record = self._buffer[:end].strip()
+                    if record:
+                        records.append(record)
+                self._buffer = self._buffer[end:]
+                continue
+
+            if len(self._buffer) > self.max_record_bytes:
+                records.append(_OVERSIZE_RECORD_MARKER)
+                self._discarding_oversize = True
+                self._retain_boundary_overlap()
+                break
+
+            if flush:
+                record = self._buffer.strip()
+                if record:
+                    records.append(record)
+                self._buffer = b""
+            break
+
+        return records
+
+
 def split_record_buffer(buffer: bytes, *, flush: bool = False) -> tuple[list[bytes], bytes]:
     """Split timestamp-delimited raw data while preserving a possible tail record."""
     starts = [match.start() for match in _RECORD_START_RE.finditer(buffer)]
@@ -94,19 +196,24 @@ def split_record_buffer(buffer: bytes, *, flush: bool = False) -> tuple[list[byt
 
 
 def split_records(path: str | Path, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
-    """Yield timestamp-delimited records from a raw-log file."""
-    buffer = b""
+    """Yield timestamp-delimited records from a raw-log file with bounded memory."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
+
+    splitter = RawRecordSplitter()
     with Path(path).open("rb") as handle:
         while chunk := handle.read(chunk_size):
-            records, buffer = split_record_buffer(buffer + chunk)
-            yield from records
+            yield from splitter.feed(chunk)
 
-    records, _ = split_record_buffer(buffer, flush=True)
-    yield from records
+    yield from splitter.feed(b"", flush=True)
 
 
 def parse_record(record: bytes | str) -> Frame:
     """Parse one ebusd message-mode raw record into a normalized frame."""
+    if isinstance(record, bytes) and record == _OVERSIZE_RECORD_MARKER:
+        raise RawParseError(
+            f"raw record exceeds {MAX_RAW_RECORD_BYTES} byte safety limit"
+        )
     if isinstance(record, bytes):
         try:
             line = record.decode("ascii", "strict").strip()
