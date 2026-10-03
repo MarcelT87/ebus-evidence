@@ -5,7 +5,7 @@ import pytest
 from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.state import EvidenceStateStore
 from ebus_evidence.watch import ResumeError, RawLogFollower, frame_events, run_watch
-from ebus_evidence.input.raw_file import parse_record
+from ebus_evidence.input.raw_file import RAW_READ_CHUNK_BYTES, parse_record
 
 
 ROOT = Path(__file__).parents[1]
@@ -405,3 +405,46 @@ def test_watch_resume_does_not_double_count_persisted_observation(tmp_path, monk
 
     final = EvidenceStateStore.open(state_path, profile)
     assert final.state["observation"]["frames_seen"] == 4
+
+
+def test_follower_reads_available_data_in_bounded_chunks(tmp_path):
+    path = tmp_path / "ebusd.raw"
+    initial = _record("2026-10-01 10:00:00.000")
+    path.write_bytes(initial)
+
+    follower = RawLogFollower(path)
+    follower.start()
+
+    with path.open("ab") as handle:
+        handle.write(b"x" * (RAW_READ_CHUNK_BYTES * 2))
+
+    assert follower.poll() == []
+    end_checkpoint = follower.checkpoint(end=True)
+    assert end_checkpoint["offset"] == len(initial) + RAW_READ_CHUNK_BYTES
+
+    follower.finish()
+
+
+def test_follower_finish_keeps_unread_backlog_for_next_resume(tmp_path):
+    path = tmp_path / "ebusd.raw"
+    initial = _record("2026-10-01 10:00:00.000")
+    path.write_bytes(initial)
+
+    follower = RawLogFollower(path)
+    follower.start()
+
+    with path.open("ab") as handle:
+        handle.write(b"x" * (RAW_READ_CHUNK_BYTES * 2))
+
+    records, tail, terminated, safe_checkpoint, end_checkpoint = follower.finish()
+
+    assert records == []
+    assert tail is not None
+    assert terminated is False
+    assert safe_checkpoint == end_checkpoint
+    assert safe_checkpoint["offset"] < path.stat().st_size
+
+    resumed = RawLogFollower(path, checkpoint=safe_checkpoint)
+    resumed.start()
+    assert resumed.resume_mode == "active"
+    resumed.finish()
