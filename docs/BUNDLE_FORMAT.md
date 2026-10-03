@@ -631,5 +631,6 @@ Related documentation:
 
 - [Installation and first run](INSTALL.md)
 - [Submit evidence](SUBMIT_EVIDENCE.md)
+- [Review public submissions](MAINTAINER_SUBMISSIONS.md)
 - [System identity](SYSTEM_IDENTITY.md)
 - [Project boundaries](PROJECT_BOUNDARIES.md)
