@@ -89,6 +89,12 @@ def _preflight_submission_zip(path: Path) -> tuple[str, int, str]:
             )
 
         for info in infos:
+            if info.compress_type != zipfile.ZIP_DEFLATED:
+                raise SubmissionError(
+                    f"public submissions require DEFLATE-compressed ZIP members: "
+                    f"{info.filename}"
+                )
+
             if info.flag_bits & 0x1:
                 raise SubmissionError(
                     f"encrypted ZIP members are not accepted: {info.filename}"
