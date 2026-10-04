@@ -78,6 +78,7 @@ jobs:
           ./evidence status --raw /tmp/ebusd-evidence-test.raw
           ./evidence export
           ./evidence verify data/evidence.zip
+          ./evidence verify --submission data/evidence.zip
 
       - name: Static copied-file import workflow
         run: |
@@ -90,6 +91,7 @@ jobs:
           ./evidence status --raw /tmp/ebusd-evidence-import.raw
           ./evidence export
           ./evidence verify data/evidence.zip
+          ./evidence verify --submission data/evidence.zip
 
       - name: Bootstrap leaves checkout clean
         run: test -z "$(git status --porcelain)"
