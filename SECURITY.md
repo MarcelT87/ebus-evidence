@@ -17,10 +17,10 @@ logs or host information in a normal GitHub issue.
 Prefer GitHub's private vulnerability reporting for this repository when it is
 available from the repository **Security** tab.
 
-If private vulnerability reporting is not available, open a minimal public
-issue stating only that you need a private security contact. Do not include
-exploit details, evidence bundles, raw logs, credentials or private system
-information in that issue.
+If private vulnerability reporting is not available, use the repository's
+**Security contact request** issue form. That issue is public: state only that
+you need a private security contact. Do not include exploit details, evidence
+bundles, raw logs, credentials or private system information in that issue.
 
 ## Evidence attachments are untrusted input
 
