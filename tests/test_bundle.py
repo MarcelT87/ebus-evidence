@@ -763,3 +763,45 @@ def test_bundle_can_explicitly_include_context_raw(tmp_path):
         )
 
     assert result["manifest"]["context_raw_count"] == 1
+
+
+def test_verify_reports_unsupported_zip_compression_as_bundle_error(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    output = tmp_path / "unknown-compression.zip"
+    create_bundle(output, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(output) as archive:
+        info = archive.getinfo("checksums.json")
+        local_header_offset = info.header_offset
+
+    data = bytearray(output.read_bytes())
+    unknown_method = (99).to_bytes(2, "little")
+
+    # Local file header compression method.
+    assert data[local_header_offset : local_header_offset + 4] == b"PK\\x03\\x04"
+    data[local_header_offset + 8 : local_header_offset + 10] = unknown_method
+
+    # Matching central-directory entry compression method.
+    position = 0
+    patched_central = False
+    while True:
+        central = data.find(b"PK\\x01\\x02", position)
+        if central < 0:
+            break
+        name_length = int.from_bytes(data[central + 28 : central + 30], "little")
+        extra_length = int.from_bytes(data[central + 30 : central + 32], "little")
+        comment_length = int.from_bytes(data[central + 32 : central + 34], "little")
+        name_start = central + 46
+        name = bytes(data[name_start : name_start + name_length])
+        if name == b"checksums.json":
+            data[central + 10 : central + 12] = unknown_method
+            patched_central = True
+            break
+        position = name_start + name_length + extra_length + comment_length
+
+    assert patched_central is True
+    output.write_bytes(data)
+
+    with pytest.raises(BundleError, match="cannot read bundle member checksums.json"):
+        verify_bundle(output)
