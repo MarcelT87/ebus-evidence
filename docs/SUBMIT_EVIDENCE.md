@@ -14,7 +14,8 @@ After collecting or importing evidence, run:
 ./evidence export
 ```
 
-This writes and immediately verifies:
+This writes the ZIP and immediately verifies both its bundle structure and the
+normal public-submission policy:
 
 ```text
 data/evidence.zip
@@ -25,6 +26,8 @@ A successful export ends with:
 ```text
 Status .............. VALID
 Deterministic ....... yes
+Public submission ... PASS
+
 Ready to share.
 ```
 
@@ -34,11 +37,13 @@ You can verify it again explicitly if you want:
 ./evidence verify data/evidence.zip
 ```
 
-Do not submit a bundle that reports `INVALID`.
+Do not submit a bundle that reports `INVALID` or
+`Public submission ... NOT READY (...)`.
 
 You do **not** need to copy verifier output into the GitHub issue. `export`
-already verifies the generated ZIP, and maintainers must independently verify
-every public submission rather than trusting pasted text. Current bundles report
+already verifies the generated ZIP and checks whether it is ready for the normal
+public submission path. Maintainers must still independently verify every public
+submission rather than trusting pasted text. Current bundles report
 runtime/profile provenance so maintainers can group evidence created by the
 same tool/profile bytes.
 
@@ -166,6 +171,7 @@ install
   -> collect or import
   -> export
   -> export verifies locally
+  -> Public submission ... PASS
   -> upload data/evidence.zip in the Evidence submission form
 ```
 
