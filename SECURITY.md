@@ -3,11 +3,17 @@
 `ebus-evidence` processes local raw-log data and may receive evidence bundles
 from untrusted contributors. Security and privacy reports are welcome.
 
-## Supported version
+## Supported versions
 
-Until the first tagged release, security fixes target the current `main`
-branch. After releases begin, this policy will be updated with an explicit
-supported-version table.
+Security fixes target the current `main` branch and the latest tagged
+`0.1.0` pre-release or release. Older development snapshots and superseded
+pre-releases are not supported.
+
+| Version line | Supported |
+| --- | --- |
+| current `main` | yes |
+| latest tagged `0.1.0` pre-release/release | yes |
+| older development snapshots or superseded pre-releases | no |
 
 ## Reporting a vulnerability
 
