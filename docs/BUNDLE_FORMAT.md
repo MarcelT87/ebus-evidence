@@ -106,7 +106,7 @@ Current v1 manifest shape:
 ```json
 {
   "format": "ebus-evidence-bundle-v1",
-  "tool_version": "0.1.0.dev0",
+  "tool_version": "<tool version>",
   "profile": "hw5103-open-evidence",
   "profile_version": 2,
   "provenance": {
