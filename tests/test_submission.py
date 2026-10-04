@@ -151,6 +151,27 @@ def test_submission_rejects_raw_context_before_full_verification(tmp_path):
         verify_submission_bundle(output)
 
 
+def test_submission_rejects_non_deflate_before_generic_verifier(
+    tmp_path, monkeypatch
+):
+    original, _ = _valid_submission(tmp_path)
+    stored = tmp_path / "stored.zip"
+
+    with zipfile.ZipFile(original) as src, zipfile.ZipFile(
+        stored, "w", compression=zipfile.ZIP_STORED
+    ) as dst:
+        for name in src.namelist():
+            dst.writestr(name, src.read(name))
+
+    def should_not_run(_path):
+        raise AssertionError("generic verifier must not run before compression preflight")
+
+    monkeypatch.setattr(submission, "verify_bundle", should_not_run)
+
+    with pytest.raises(SubmissionError, match="DEFLATE-compressed"):
+        verify_submission_bundle(stored)
+
+
 def test_submission_rejects_repacked_nondeterministic_bundle(tmp_path):
     original, _ = _valid_submission(tmp_path)
     repacked = tmp_path / "repacked.zip"
