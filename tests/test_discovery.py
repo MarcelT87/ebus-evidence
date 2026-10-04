@@ -1,5 +1,8 @@
+import subprocess
+
 from ebus_evidence.discovery.ebusd import (
     DockerMount,
+    diagnose_docker_access,
     discover_docker_ebusd,
     discover_native_ebusd,
     map_container_path_to_host,
@@ -129,3 +132,21 @@ def test_native_systemd_discovery_ignores_inactive_service(monkeypatch):
         return "inactive\n"
 
     assert discover_native_ebusd(runner=fake_runner, proc_reader=lambda pid: []) is None
+
+
+def test_diagnose_docker_access_reports_permission_denied():
+    def fake_runner(command):
+        raise subprocess.CalledProcessError(
+            1,
+            command,
+            stderr=(
+                "permission denied while trying to connect to the Docker daemon "
+                "socket at unix:///var/run/docker.sock"
+            ),
+        )
+
+    error = diagnose_docker_access(runner=fake_runner)
+
+    assert error is not None
+    assert "permission denied" in error
+    assert "cannot access the Docker daemon" in error

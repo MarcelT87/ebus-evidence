@@ -146,6 +146,39 @@ def _find_ebusd_command(top_output: str) -> list[str] | None:
     return None
 
 
+def diagnose_docker_access(runner: Runner = _run_command) -> str | None:
+    """Return a concise diagnostic when Docker cannot be inspected.
+
+    This is intentionally read-only: it only runs docker ps and never changes
+    Docker or ebusd state. A None result means Docker access itself did not
+    explain why ebusd discovery failed.
+    """
+    if shutil.which("docker") is None and runner is _run_command:
+        return None
+
+    try:
+        runner(["docker", "ps", "--format", "{{.ID}}"])
+    except FileNotFoundError:
+        return None
+    except subprocess.CalledProcessError as exc:
+        stderr = str(exc.stderr or "").strip()
+        stdout = str(exc.stdout or "").strip()
+        detail = stderr or stdout
+        if "permission denied" in detail.lower():
+            return (
+                "permission denied while running 'docker ps'; "
+                "the current user cannot access the Docker daemon"
+            )
+        if detail:
+            return f"'docker ps' failed: {detail}"
+        return "'docker ps' failed"
+    except PermissionError:
+        return "permission denied while running Docker"
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    return None
+
 def discover_docker_ebusd(runner: Runner = _run_command) -> EbusdDiscovery | None:
     if shutil.which("docker") is None and runner is _run_command:
         return None
