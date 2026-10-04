@@ -128,7 +128,7 @@ This creates:
 data/evidence.zip
 ```
 
-and immediately verifies the bundle.
+and immediately verifies the bundle and the normal public-submission policy.
 
 If `data/system.json` exists and is valid, it is included automatically.
 Raw context payloads remain **excluded by default**.
@@ -138,6 +138,8 @@ The successful result ends with:
 ```text
 Status .............. VALID
 Deterministic ....... yes
+Public submission ... PASS
+
 Ready to share.
 ```
 
@@ -152,9 +154,11 @@ data/evidence.zip
 through the repository's **Evidence submission** issue form.
 
 The form has one required `.zip` upload field plus a small environment/privacy
-checklist. You do not need to copy verifier output into the issue: `export`
-already verifies the generated bundle, and maintainers should independently
-verify every submitted ZIP before trusting it.
+checklist. A normal default export should report `Public submission ... PASS`
+before you upload it. You do not need to copy verifier output into the issue:
+`export` already performs the local structural and public-submission checks,
+and maintainers should independently verify every submitted ZIP before trusting
+it.
 
 Do not attach the complete `ebusd.raw` file. The normal ZIP intentionally keeps
 the contribution small and excludes raw context by default.
