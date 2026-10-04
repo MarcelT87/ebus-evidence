@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import zipfile
+import json
+import hashlib
 from copy import deepcopy
 
 import pytest
@@ -11,6 +13,56 @@ from ebus_evidence.cli import main
 from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.state import EvidenceStateStore
 from ebus_evidence.submission import SubmissionError, verify_submission_bundle
+
+
+def test_segmented_contexts_export_deterministically_and_pass_submission(tmp_path, monkeypatch):
+    from ebus_evidence.context import ContextCaptureManager
+    import ebus_evidence.context as context_module
+
+    monkeypatch.setattr(context_module, "MAX_CONTEXT_TRIGGERS", 2)
+    profile = load_profile("hw5103-open-evidence")
+    state = tmp_path / "state.json"
+    store = EvidenceStateStore.open(state, profile)
+    contexts = tmp_path / "contexts"
+    manager = ContextCaptureManager(contexts, profile)
+    for second in range(5):
+        raw_time = f"2026-10-01 21:00:0{second}.000"
+        timestamp = {"raw": raw_time, "utc": None, "display": None}
+        store.observe_frame(timestamp, initiated_by_ebusd=False)
+        manager.observe((raw_time + " <f108b50905540200ba080000080201ba0820000000\n").encode())
+        event = {
+            "check_id": "hmu_ba08_variants", "timestamp": timestamp,
+            "source": "f1", "target": "08", "pbsb": "b509",
+            "request": "05540200ba08", "response": "080201ba0820000000",
+            "value_status": "decoded", "value": 32,
+        }
+        store.add(event)
+        manager.trigger_event(event)
+    manager.finish()
+    first, second = tmp_path / "a.zip", tmp_path / "b.zip"
+    for output in (first, second):
+        create_bundle(output, profile, state_path=state, context_dir=contexts)
+        result = verify_submission_bundle(output)
+        assert result["submission_policy"]["valid"] is True
+        assert result["context_metadata_count"] == 3
+        assert result["context_raw_count"] == 0
+    assert first.read_bytes() == second.read_bytes()
+
+    with zipfile.ZipFile(first) as archive:
+        members = {name: archive.read(name) for name in archive.namelist()}
+    name = next(name for name in members if name.startswith("contexts/"))
+    metadata = json.loads(members[name])
+    metadata["continuation_of"] = "../private.raw"
+    members[name] = json.dumps(metadata).encode()
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"][name] = hashlib.sha256(members[name]).hexdigest()
+    members["checksums.json"] = json.dumps(checksums).encode()
+    with zipfile.ZipFile(second, "w") as archive:
+        for name, content in members.items():
+            archive.writestr(name, content)
+    from ebus_evidence.bundle import BundleError
+    with pytest.raises(BundleError, match="safe raw filename"):
+        verify_bundle(second)
 
 
 def _timestamp():

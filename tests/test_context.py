@@ -1,11 +1,16 @@
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
+
+import pytest
+import ebus_evidence.context as context_module
 
 from ebus_evidence.context import (
     ContextCaptureManager,
     ContextError,
     context_metadata_scope,
     context_should_trigger,
+    validate_capture_metadata,
 )
 from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.watch import run_watch
@@ -50,6 +55,109 @@ def _profile() -> dict:
             }
         ],
     }
+
+
+def _metadata(directory):
+    return [json.loads(path.read_text()) for path in sorted(directory.glob("*.json"))]
+
+
+def test_continuous_triggers_split_and_keep_every_record_and_trigger(tmp_path):
+    manager = ContextCaptureManager(tmp_path, _profile())
+    start = datetime(2026, 10, 1, 10)
+    for second in range(3600):
+        timestamp = (start + timedelta(seconds=second)).strftime("%Y-%m-%d %H:%M:%S.000")
+        manager.observe(_record(timestamp))
+        manager.trigger_event(_event(timestamp, 32))
+        for session in manager.active.values():
+            assert len(session.triggers) <= context_module.MAX_CONTEXT_TRIGGERS
+            assert session.raw_bytes <= context_module.MAX_CONTEXT_BYTES
+    manager.finish()
+    metadata = _metadata(tmp_path)
+    assert len(metadata) > 1
+    assert sum(m["trigger_count"] for m in metadata) == 3600
+    assert sum(m["record_count"] for m in metadata) == 3600
+    previous = None
+    for m in metadata:
+        validate_capture_metadata(m)
+        assert m["continuation_of"] == previous
+        assert m["post_window_complete"] is False
+        previous = m["raw_file"]
+    assert {m["capture_end_reason"] for m in metadata} == {"trigger_limit", "collection_stopped"}
+
+
+@pytest.mark.parametrize("limit_name,limit_value,reason", [
+    ("MAX_CONTEXT_SECONDS", 2, "duration_limit"),
+    ("MAX_CONTEXT_RECORDS", 2, "record_limit"),
+    ("MAX_CONTEXT_BYTES", 90, "byte_limit"),
+])
+def test_context_segments_preserve_post_window_without_new_trigger(
+    tmp_path, monkeypatch, limit_name, limit_value, reason
+):
+    monkeypatch.setattr(context_module, limit_name, limit_value)
+    profile = _profile()
+    profile["checks"][0]["context"]["before_seconds"] = 0
+    profile["checks"][0]["context"]["after_seconds"] = 6
+    manager = ContextCaptureManager(tmp_path, profile)
+    for second in range(8):
+        timestamp = f"2026-10-01 10:00:0{second}.000"
+        manager.observe(_record(timestamp))
+        if second == 0:
+            manager.trigger_event(_event(timestamp, 32))
+    metadata = _metadata(tmp_path)
+    assert len(metadata) > 1
+    assert sum(m["record_count"] for m in metadata) == 7
+    assert sum(m["trigger_count"] for m in metadata) == 1
+    assert metadata[0]["capture_end_reason"] == reason
+    assert metadata[-1]["capture_end_reason"] == "post_window_complete"
+    assert metadata[-1]["post_window_complete"] is True
+    for m in metadata[1:]:
+        assert m["continuation_of"] is not None
+        assert m["pre_window_complete"] is False
+    for m in metadata:
+        validate_capture_metadata(m)
+        assert (tmp_path / m["raw_file"]).stat().st_size <= context_module.MAX_CONTEXT_BYTES
+
+
+@pytest.mark.parametrize("limit_name,limit_value", [
+    ("MAX_RING_RECORDS", 2), ("MAX_RING_BYTES", 90),
+])
+def test_ring_limits_retain_incomplete_pre_window_metadata(
+    tmp_path, monkeypatch, limit_name, limit_value
+):
+    monkeypatch.setattr(context_module, limit_name, limit_value)
+    manager = ContextCaptureManager(tmp_path, _profile())
+    # Repeated timestamps must not defeat the memory bounds.
+    for _ in range(100):
+        manager.observe(_record("2026-10-01 10:00:00.000"))
+    assert len(manager.buffer) <= context_module.MAX_RING_RECORDS
+    assert manager.buffer_bytes <= context_module.MAX_RING_BYTES
+    manager.observe(_record("2026-10-01 10:00:02.000"))
+    manager.trigger_event(_event("2026-10-01 10:00:02.000", 32))
+    manager.finish()
+    assert _metadata(tmp_path)[0]["pre_window_complete"] is False
+
+
+def test_backward_clock_jump_closes_context_as_incomplete(tmp_path):
+    manager = ContextCaptureManager(tmp_path, _profile())
+    manager.observe(_record("2026-10-01 10:00:02.000"))
+    manager.trigger_event(_event("2026-10-01 10:00:02.000", 32))
+    manager.observe(_record("2026-10-01 10:00:01.000"))
+    metadata = _metadata(tmp_path)[0]
+    assert metadata["capture_end_reason"] == "clock_regression"
+    assert metadata["post_window_complete"] is False
+    assert not manager.active
+
+
+def test_bounded_context_metadata_rejects_unsafe_links_and_false_completeness(tmp_path):
+    manager = ContextCaptureManager(tmp_path, _profile())
+    manager.observe(_record("2026-10-01 10:00:02.000"))
+    manager.trigger_event(_event("2026-10-01 10:00:02.000", 32))
+    manager.finish()
+    metadata = _metadata(tmp_path)[0]
+    with pytest.raises(ContextError, match="safe raw filename"):
+        validate_capture_metadata({**metadata, "continuation_of": "../private.raw"})
+    with pytest.raises(ContextError, match="contradicts"):
+        validate_capture_metadata({**metadata, "post_window_complete": True})
 
 
 def test_context_predicate_only_triggers_nonzero_value():

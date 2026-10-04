@@ -471,6 +471,46 @@ record_count
 raw_file
 ```
 
+Newly captured contexts also carry these additive fields; older context-v1
+metadata without them remains valid:
+
+| Field | Meaning |
+|---|---|
+| `segment_started_at` | Raw source timestamp at the start of this segment. |
+| `capture_end_timestamp` | Raw source timestamp at the boundary that closed it. |
+| `capture_end_reason` | `post_window_complete`, `collection_stopped`, `duration_limit`, `byte_limit`, `record_limit`, `trigger_limit`, or `clock_regression`. |
+| `continuation_of` | Previous segment's safe `.raw` basename, or `null`. This is a reference, not an exported host path. |
+| `capture_limits` | Positive integer `max_seconds`, `max_bytes`, `max_records`, and `max_triggers` used for capture. |
+
+The default limits are 900 seconds from segment start, 4 MiB of raw records,
+10,000 records and 256 triggers per segment. The pre-trigger ring is separately
+limited to 2 MiB and 10,000 records as well as the profile's time window.
+The first segment may additionally contain its retained pre-trigger window.
+
+Repeated triggers extend the requested post-window, but never these segment
+limits. When a limit is reached, the current segment closes with
+`post_window_complete=false` and a linked continuation receives subsequent
+records. No pre-window is copied into a continuation. Its
+`pre_window_complete` is therefore false; its trigger list may be empty when
+it only completes the previous segment's post-window. At a trigger-count
+boundary, the triggering record can be in the preceding segment while the
+trigger metadata is in the continuation; consumers should follow the link.
+
+Only reaching the requested post-window sets `post_window_complete=true`.
+Stopping collection or a backward source-clock jump closes active windows as
+incomplete. Source-clock regressions reset the pre-trigger ring and do not join
+observations across the discontinuity. Eviction from the ring by its byte or
+record budget also prevents claiming a complete affected pre-window.
+
+These are per-ring/per-active-check memory bounds, not a total disk quota.
+Completed local context files accumulate and are not automatically deleted.
+Raw context remains excluded from normal exports; segmentation metadata is
+included. The normal submission size/member limits still apply.
+
+The verifier validates these fields when present, including safe continuation
+filenames, count limits and completion flags. It does not authenticate capture
+claims or prove that all referenced segments were supplied.
+
 Context metadata included in a bundle must match the embedded active
 profile name/version.
 

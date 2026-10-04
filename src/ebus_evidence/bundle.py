@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 
 from ebus_evidence import __version__
-from ebus_evidence.context import ContextError, context_metadata_scope
+from ebus_evidence.context import ContextError, context_metadata_scope, validate_capture_metadata
 from ebus_evidence.profiles.loader import ProfileError, validate_profile_data
 from ebus_evidence.provenance import ProvenanceError, bundle_provenance
 from ebus_evidence.state import load_state, profile_fingerprint
@@ -686,6 +686,10 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
                 raise BundleError(f"context/profile name mismatch: {name}")
             if metadata.get("profile_version") != profile.get("version", 1):
                 raise BundleError(f"context/profile version mismatch: {name}")
+            try:
+                validate_capture_metadata(metadata)
+            except ContextError as exc:
+                raise BundleError(f"invalid context capture metadata in {name}: {exc}") from exc
             try:
                 raw_name = _safe_context_raw_name(metadata.get("raw_file"))
             except BundleError as exc:

@@ -65,7 +65,36 @@ The default export does **not** include:
 Absolute observation/evidence timestamps are retained intentionally because
 timing is part of reproducible protocol evidence.
 
-## 3. Open an Evidence submission issue
+## 3. Get the ZIP onto the device with your browser
+
+`export` prints the absolute local path of the completed ZIP. The path is shown
+in your terminal; it is not added to the bundle.
+
+If collection and your browser run on the same computer, select that file in
+the upload dialog. If collection runs on a server or inside a container, first
+copy **only the generated ZIP** to the computer or phone with your browser.
+
+Use an existing SFTP/file-transfer client: connect to the machine where the
+file is stored, navigate to the path printed by `export`, and download
+`evidence.zip`. A container path may require accessing that container or its
+existing shared directory; the same path need not exist on the host.
+
+If you already use SSH/SCP, run this on your **browser computer**, replacing
+the example user, host and path with your own values:
+
+```bash
+scp user@server:/path/to/ebus-evidence/data/evidence.zip ./evidence.zip
+```
+
+Then select the downloaded `evidence.zip` in GitHub. Do not paste your private
+connection details into the issue. No Git commit, repository write access or
+GitHub token is needed to attach the file through the issue form.
+
+The tool does not upload automatically or start a file server. If you cannot
+reach the file from your browser device, resolve that transfer step before
+submitting the issue.
+
+## 4. Open an Evidence submission issue
 
 Open a new GitHub issue and choose the **Evidence submission** form.
 
@@ -85,7 +114,7 @@ The upload field accepts ZIP files only. Attach the generated
 Do not include IP addresses, usernames, passwords, tokens, Wi-Fi details,
 serial numbers or unrelated host configuration.
 
-## 4. Public-sharing reminder
+## 5. Public-sharing reminder
 
 This repository is public.
 
@@ -96,7 +125,7 @@ still contains protocol observations and absolute timestamps.
 If you are not comfortable sharing that information publicly, do not attach the
 bundle to a public issue.
 
-## 5. Raw context
+## 6. Raw context
 
 For normal community submissions, use the default export:
 
@@ -111,7 +140,7 @@ Never attach the complete long-running `ebusd.raw` file just because a normal
 evidence bundle has too few matches. A maintainer can ask for a smaller,
 reviewed follow-up sample if it is genuinely needed.
 
-## 6. What happens after submission
+## 7. What happens after submission
 
 A submitted bundle can be checked for:
 

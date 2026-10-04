@@ -10,6 +10,31 @@ from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.system_identity import build_system_document, parse_scan_result
 
 
+def test_status_blocks_export_for_invalid_optional_system_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied.raw"
+    raw.write_bytes(_matching_record("2026-10-01 10:00:01.000"))
+    assert main(["import", "--raw", str(raw)]) == 0
+    system = tmp_path / "data" / "system.json"
+    system.write_text("{}")
+    capsys.readouterr()
+
+    assert main(["status", "--raw", str(raw)]) == 0
+    output = capsys.readouterr().out
+    assert "System identity ..... invalid" in output
+    assert "Ready to export ..... NO" in output
+    assert "Correct the invalid system identity file" in output
+    assert main(["export"]) == 2
+    assert not (tmp_path / "data" / "evidence.zip").exists()
+
+    system.write_text(json.dumps(build_system_document(parse_scan_result(
+        "08;Vaillant;HMU00;0902;5103"
+    ))))
+    assert main(["status", "--raw", str(raw)]) == 0
+    assert "Ready to export ..... YES" in capsys.readouterr().out
+    assert main(["export"]) == 0
+
+
 def _record(timestamp: str) -> bytes:
     return f"{timestamp} <1008b50702090000\n".encode("ascii")
 

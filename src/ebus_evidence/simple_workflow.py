@@ -498,10 +498,12 @@ def status(
         print("Context metadata .... 0 current")
 
     system_file = Path(system_path)
+    system_invalid = False
     if system_file.is_file():
         try:
             system = load_system_document(system_file)
         except SystemIdentityError as exc:
+            system_invalid = True
             print(f"System identity ..... invalid ({exc})")
         else:
             print(
@@ -515,6 +517,7 @@ def status(
         (state_has_observation or current_context_count > 0)
         and not state_invalid
         and not context_invalid
+        and not system_invalid
     )
     print()
     print(f"Ready to export ..... {'YES' if ready else 'NO'}")
@@ -527,7 +530,10 @@ def status(
     else:
         print()
         print("Next:")
-        if rollover_pending:
+        if system_invalid:
+            print(f"  Correct the invalid system identity file: {system_file}")
+            print("  Then run ./evidence status again.")
+        elif rollover_pending:
             print("  ./evidence collect   # starts the new profile observation epoch")
         else:
             print("  ./evidence collect")
@@ -649,7 +655,7 @@ def export(
         print(f"error: export failed: {exc}")
         return 2
 
-    print(f"Output .............. {output}")
+    print(f"Output .............. {output.resolve()}")
     print(f"Status .............. {'VALID' if verified['valid'] else 'INVALID'}")
     print(
         f"Deterministic ....... "
