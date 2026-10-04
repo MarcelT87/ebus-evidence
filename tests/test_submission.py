@@ -177,7 +177,7 @@ def test_submission_preflight_rejects_archive_size_before_verification(
         bundle.stat().st_size - 1,
     )
 
-    with pytest.raises(SubmissionError, match="25 MiB public upload policy"):
+    with pytest.raises(SubmissionError, match="25 MB public upload policy"):
         verify_submission_bundle(bundle)
 
 
