@@ -12,10 +12,11 @@ from typing import Any, BinaryIO
 from ebus_evidence.context import ContextCaptureManager
 from ebus_evidence.decoders import DecodeError, decode_value
 from ebus_evidence.input.raw_file import (
+    RAW_READ_CHUNK_BYTES,
     RawNonFrame,
     RawParseError,
+    RawRecordSplitter,
     parse_record,
-    split_record_buffer,
 )
 from ebus_evidence.matching import frame_matches
 from ebus_evidence.models import Frame
@@ -59,7 +60,7 @@ class RawLogFollower:
         self.requested_checkpoint = checkpoint
         self._handle: BinaryIO | None = None
         self._inode: tuple[int, int] | None = None
-        self._buffer = b""
+        self._splitter = RawRecordSplitter()
         self.rotations = 0
         self.resume_mode = "fresh_end"
 
@@ -161,13 +162,12 @@ class RawLogFollower:
         )
 
     def _consume_bytes(self, data: bytes, *, flush: bool = False) -> list[bytes]:
-        records, self._buffer = split_record_buffer(self._buffer + data, flush=flush)
-        return records
+        return self._splitter.feed(data, flush=flush)
 
     def _read_available(self) -> bytes:
         if self._handle is None:
             return b""
-        return self._handle.read()
+        return self._handle.read(RAW_READ_CHUNK_BYTES)
 
     def checkpoint(self, *, end: bool = False) -> dict[str, Any]:
         if self._handle is None or self._inode is None:
@@ -176,7 +176,7 @@ class RawLogFollower:
         current = self._handle.tell()
         offset = current
         if not end:
-            offset -= len(self._buffer)
+            offset -= self._splitter.pending_bytes
 
         anchor_start = max(0, offset - 256)
         try:
@@ -207,9 +207,13 @@ class RawLogFollower:
 
         current_inode = self._identity(path_stat)
         if current_inode != self._inode:
-            # The current handle refers to the renamed old file. Drain it fully,
-            # then switch to the new active file at byte zero.
-            records.extend(self._consume_bytes(self._read_available(), flush=True))
+            # The current handle refers to the renamed old file. Drain it in
+            # bounded chunks before switching to the new active file.
+            old_stat = os.fstat(self._handle.fileno())
+            if self._handle.tell() < old_stat.st_size:
+                return records
+
+            records.extend(self._consume_bytes(b"", flush=True))
             self._handle.close()
             self._handle = None
             self._inode = None
@@ -241,13 +245,24 @@ class RawLogFollower:
             raise ResumeError("raw follower is not open")
 
         records = self._consume_bytes(self._read_available())
-        tail_bytes = self._buffer
-        tail_terminated = tail_bytes.endswith(b"\n")
-        tail = tail_bytes.strip() or None
-        safe_checkpoint = self.checkpoint()
-        end_checkpoint = self.checkpoint(end=True)
+        stat = os.fstat(self._handle.fileno())
+        unread_bytes_remain = self._handle.tell() < stat.st_size
 
-        self._buffer = b""
+        tail_bytes = self._splitter.pending
+        tail = tail_bytes.strip() or None
+        tail_terminated = (
+            not unread_bytes_remain
+            and not self._splitter.discarding_oversize
+            and tail_bytes.endswith(b"\n")
+        )
+        safe_checkpoint = self.checkpoint()
+        end_checkpoint = (
+            safe_checkpoint
+            if unread_bytes_remain
+            else self.checkpoint(end=True)
+        )
+
+        self._splitter.reset()
         self._handle.close()
         self._handle = None
         return records, tail, tail_terminated, safe_checkpoint, end_checkpoint

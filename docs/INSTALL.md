@@ -432,17 +432,25 @@ The command uses the standard local paths automatically:
 - `data/system.json` when present and valid;
 - output `data/evidence.zip`.
 
-It then immediately runs the existing bundle verifier.
+It then immediately runs the bundle verifier and the normal public-submission policy.
 
 A successful result reports:
 
 ```text
 Status .............. VALID
 Deterministic ....... yes
+Public submission ... PASS
+
 Ready to share.
 ```
 
 Raw context payloads are excluded by default.
+
+If the ZIP is structurally valid but does not satisfy the normal public
+submission policy, export keeps the local ZIP but reports
+`Public submission ... NOT READY (...)` instead of `Ready to share.`.
+Do not upload that file through the normal Evidence submission form until the
+reported policy reason is resolved.
 
 Absolute observation/evidence timestamps remain included because timing is
 research evidence. The bundle and verifier disclose this explicitly.

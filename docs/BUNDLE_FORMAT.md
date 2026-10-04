@@ -86,7 +86,8 @@ Bundles created by the current exporter use:
 - DEFLATE compression;
 - canonical JSON/YAML serialization for generated members.
 
-The verifier reports whether this deterministic layout is present.
+The verifier reports whether this deterministic layout is present, including
+that every member uses DEFLATE compression.
 
 A repacked archive can still be structurally and cryptographically valid while
 reporting:
@@ -471,6 +472,46 @@ record_count
 raw_file
 ```
 
+Newly captured contexts also carry these additive fields; older context-v1
+metadata without them remains valid:
+
+| Field | Meaning |
+|---|---|
+| `segment_started_at` | Raw source timestamp at the start of this segment. |
+| `capture_end_timestamp` | Raw source timestamp at the boundary that closed it. |
+| `capture_end_reason` | `post_window_complete`, `collection_stopped`, `duration_limit`, `byte_limit`, `record_limit`, `trigger_limit`, or `clock_regression`. |
+| `continuation_of` | Previous segment's safe `.raw` basename, or `null`. This is a reference, not an exported host path. |
+| `capture_limits` | Positive integer `max_seconds`, `max_bytes`, `max_records`, and `max_triggers` used for capture. |
+
+The default limits are 900 seconds from segment start, 4 MiB of raw records,
+10,000 records and 256 triggers per segment. The pre-trigger ring is separately
+limited to 2 MiB and 10,000 records as well as the profile's time window.
+The first segment may additionally contain its retained pre-trigger window.
+
+Repeated triggers extend the requested post-window, but never these segment
+limits. When a limit is reached, the current segment closes with
+`post_window_complete=false` and a linked continuation receives subsequent
+records. No pre-window is copied into a continuation. Its
+`pre_window_complete` is therefore false; its trigger list may be empty when
+it only completes the previous segment's post-window. At a trigger-count
+boundary, the triggering record can be in the preceding segment while the
+trigger metadata is in the continuation; consumers should follow the link.
+
+Only reaching the requested post-window sets `post_window_complete=true`.
+Stopping collection or a backward source-clock jump closes active windows as
+incomplete. Source-clock regressions reset the pre-trigger ring and do not join
+observations across the discontinuity. Eviction from the ring by its byte or
+record budget also prevents claiming a complete affected pre-window.
+
+These are per-ring/per-active-check memory bounds, not a total disk quota.
+Completed local context files accumulate and are not automatically deleted.
+Raw context remains excluded from normal exports; segmentation metadata is
+included. The normal submission size/member limits still apply.
+
+The verifier validates these fields when present, including safe continuation
+filenames, count limits and completion flags. It does not authenticate capture
+claims or prove that all referenced segments were supplied.
+
 Context metadata included in a bundle must match the embedded active
 profile name/version.
 
@@ -521,6 +562,51 @@ Absolute timestamps remain part of v1 evidence because timing is useful for
 reproducibility and correlation. Their presence is explicitly disclosed by
 current manifests and verifier output.
 
+## Public submission policy
+
+Structural bundle validity and public submission acceptance are deliberately
+separate decisions.
+
+The normal verifier remains format-focused:
+
+```bash
+./evidence verify evidence.zip
+```
+
+Maintainers reviewing untrusted public uploads should use:
+
+```bash
+./evidence verify --submission evidence.zip
+```
+
+The stricter submission policy currently requires:
+
+- compressed ZIP size at or below 25 MB (25,000,000 bytes), matching the public GitHub upload limit;
+- at most 1000 archive members;
+- at most 64 MiB total uncompressed content;
+- DEFLATE compression for every ZIP member;
+- no encrypted ZIP members;
+- no raw `contexts/*.raw` members;
+- an included evidence state;
+- current runtime/profile provenance;
+- explicit absolute-timestamp disclosure;
+- deterministic exporter layout;
+- at least some observed evidence;
+- an embedded profile that exactly matches the currently bundled trusted
+  profile name/version/content.
+
+The policy performs its tighter archive preflight before the full bundle
+verification so obviously oversized or raw-context submissions can be rejected
+without first processing their complete contents.
+
+These rules are an acceptance policy for normal public contributions, not a new
+bundle-format version. A bundle may remain structurally valid under bundle v1
+while being unsuitable for normal public submission.
+
+A successful submission-policy result is still **not** an authenticity proof.
+A contributor can fabricate observations that satisfy the public data contract.
+Human research review and cross-installation comparison remain necessary.
+
 ## Consumer guidance
 
 An independent consumer should:
@@ -567,18 +653,26 @@ binary.
 
 ## Reference implementation
 
-The current reference implementation and verifier live in:
+The current reference format verifier lives in:
 
 ```text
 src/ebus_evidence/bundle.py
 ```
 
-The reference verifier remains authoritative for the exact acceptance behavior
-of the current release line.
+The additional public-submission acceptance policy lives in:
+
+```text
+src/ebus_evidence/submission.py
+```
+
+The format verifier remains authoritative for bundle-v1 structural acceptance;
+the submission module intentionally layers stricter public-contribution policy
+on top.
 
 Related documentation:
 
 - [Installation and first run](INSTALL.md)
 - [Submit evidence](SUBMIT_EVIDENCE.md)
+- [Review public submissions](MAINTAINER_SUBMISSIONS.md)
 - [System identity](SYSTEM_IDENTITY.md)
 - [Project boundaries](PROJECT_BOUNDARIES.md)

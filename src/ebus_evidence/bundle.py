@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 
 from ebus_evidence import __version__
-from ebus_evidence.context import ContextError, context_metadata_scope
+from ebus_evidence.context import ContextError, context_metadata_scope, validate_capture_metadata
 from ebus_evidence.profiles.loader import ProfileError, validate_profile_data
 from ebus_evidence.provenance import ProvenanceError, bundle_provenance
 from ebus_evidence.state import load_state, profile_fingerprint
@@ -403,7 +403,7 @@ def _read_member(archive: zipfile.ZipFile, name: str) -> bytes:
         return archive.read(name)
     except KeyError as exc:
         raise BundleError(f"missing required bundle member: {name}") from exc
-    except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+    except (OSError, RuntimeError, NotImplementedError, zipfile.BadZipFile) as exc:
         raise BundleError(f"cannot read bundle member {name}: {exc}") from exc
 
 
@@ -687,6 +687,10 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
             if metadata.get("profile_version") != profile.get("version", 1):
                 raise BundleError(f"context/profile version mismatch: {name}")
             try:
+                validate_capture_metadata(metadata)
+            except ContextError as exc:
+                raise BundleError(f"invalid context capture metadata in {name}: {exc}") from exc
+            try:
                 raw_name = _safe_context_raw_name(metadata.get("raw_file"))
             except BundleError as exc:
                 raise BundleError(f"invalid context raw_file reference in {name}: {exc}") from exc
@@ -734,6 +738,7 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         deterministic_layout = (
             names == sorted(names)
             and all(info.date_time == _ZIP_TIME for info in infos)
+            and all(info.compress_type == zipfile.ZIP_DEFLATED for info in infos)
         )
 
     return {

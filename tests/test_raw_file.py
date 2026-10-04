@@ -2,6 +2,8 @@ from pathlib import Path
 
 from ebus_evidence.input.raw_file import (
     RawNonFrame,
+    RawParseError,
+    RawRecordSplitter,
     parse_record,
     resolve_raw_sources,
     split_records,
@@ -83,3 +85,56 @@ def test_truncated_declared_request_is_non_frame():
         parse_record(b"2026-09-25 13:15:04.714 >3115b55503a400")
     assert excinfo.value.kind == "truncated_request"
     assert "declared request length" in str(excinfo.value)
+
+
+def test_incremental_splitter_bounds_unframed_garbage():
+    splitter = RawRecordSplitter(max_record_bytes=128)
+
+    assert splitter.feed(b"x" * 10000) == []
+    assert splitter.pending_bytes <= 64
+
+
+def test_incremental_splitter_skips_oversized_record_and_recovers():
+    import pytest
+
+    splitter = RawRecordSplitter(max_record_bytes=128)
+    oversized = (
+        b"2026-10-01 10:00:00.000 <"
+        + b"aa" * 100
+    )
+    valid = b"2026-10-01 10:00:01.000 <1008b50702090000"
+
+    first = splitter.feed(oversized)
+    assert len(first) == 1
+    with pytest.raises(RawParseError, match="safety limit"):
+        parse_record(first[0])
+
+    recovered = splitter.feed(b"\n" + valid, flush=True)
+    assert len(recovered) == 1
+    assert parse_record(recovered[0]).request == "020900"
+
+
+def test_split_records_skips_oversized_record_without_large_pending_buffer(tmp_path):
+    import pytest
+
+    path = tmp_path / "oversized.raw"
+    oversized = (
+        b"2026-10-01 10:00:00.000 <"
+        + b"aa" * 100
+        + b"\n"
+    )
+    valid = b"2026-10-01 10:00:01.000 <1008b50702090000\n"
+    path.write_bytes(oversized + valid)
+
+    records = list(
+        split_records(
+            path,
+            chunk_size=31,
+            max_record_bytes=128,
+        )
+    )
+
+    assert len(records) == 2
+    with pytest.raises(RawParseError, match="safety limit"):
+        parse_record(records[0])
+    assert parse_record(records[1]).request == "020900"

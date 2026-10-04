@@ -16,6 +16,7 @@ from ebus_evidence.state import (
     StateError,
     load_state,
 )
+from ebus_evidence.submission import SubmissionError, verify_submission_bundle
 from ebus_evidence.system_identity import SystemIdentityError, load_system_document
 from ebus_evidence.timeutil import TimezoneError, get_timezone
 from ebus_evidence.watch import ResumeError, run_watch
@@ -498,10 +499,12 @@ def status(
         print("Context metadata .... 0 current")
 
     system_file = Path(system_path)
+    system_invalid = False
     if system_file.is_file():
         try:
             system = load_system_document(system_file)
         except SystemIdentityError as exc:
+            system_invalid = True
             print(f"System identity ..... invalid ({exc})")
         else:
             print(
@@ -515,6 +518,7 @@ def status(
         (state_has_observation or current_context_count > 0)
         and not state_invalid
         and not context_invalid
+        and not system_invalid
     )
     print()
     print(f"Ready to export ..... {'YES' if ready else 'NO'}")
@@ -527,7 +531,10 @@ def status(
     else:
         print()
         print("Next:")
-        if rollover_pending:
+        if system_invalid:
+            print(f"  Correct the invalid system identity file: {system_file}")
+            print("  Then run ./evidence status again.")
+        elif rollover_pending:
             print("  ./evidence collect   # starts the new profile observation epoch")
         else:
             print("  ./evidence collect")
@@ -649,7 +656,13 @@ def export(
         print(f"error: export failed: {exc}")
         return 2
 
-    print(f"Output .............. {output}")
+    submission_error: str | None = None
+    try:
+        verify_submission_bundle(output)
+    except (SubmissionError, BundleError) as exc:
+        submission_error = str(exc)
+
+    print(f"Output .............. {output.resolve()}")
     print(f"Status .............. {'VALID' if verified['valid'] else 'INVALID'}")
     print(
         f"Deterministic ....... "
@@ -689,6 +702,16 @@ def export(
     if verified.get("absolute_timestamps_included") is True:
         print("Absolute timestamps . yes")
     print(f"SHA256 .............. {created['sha256']}")
+    print(
+        "Public submission ... "
+        + ("PASS" if submission_error is None else f"NOT READY ({submission_error})")
+    )
     print()
-    print("Ready to share.")
+    if submission_error is None:
+        print("Ready to share.")
+    else:
+        print(
+            "Bundle created and structurally valid, but not ready for normal "
+            "public submission."
+        )
     return 0

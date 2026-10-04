@@ -1003,6 +1003,25 @@ semantics.
 
 ---
 
+# Context segments and export readiness
+
+If a rare-event context repeats continuously, the collector now writes bounded,
+linked segments. A `duration_limit`, `byte_limit`, `record_limit`, or
+`trigger_limit` end reason is intentional: the observation counters continue
+and subsequent context records go into the next segment. A limited segment
+does not claim a complete post-window. See [Bundle format](BUNDLE_FORMAT.md)
+for limits and metadata. Local context files still need sufficient disk space.
+
+If `status` reports invalid system identity and `Ready to export ..... NO`,
+correct the indicated `system.json` using [System identity](SYSTEM_IDENTITY.md),
+then run `status` again. System identity is optional when absent; an existing
+invalid file is not silently ignored by export.
+
+If the ZIP is on a server/container and cannot be selected in your browser,
+follow [Get the ZIP onto your browser device](SUBMIT_EVIDENCE.md#3-get-the-zip-onto-the-device-with-your-browser).
+
+---
+
 # Related documentation
 
 - [Installation and first run](INSTALL.md)

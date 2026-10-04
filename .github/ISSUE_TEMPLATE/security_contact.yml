@@ -1,0 +1,20 @@
+name: Security contact request
+description: Request a private channel for a potentially sensitive security report
+title: "Security contact: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form only when GitHub private vulnerability reporting is unavailable.
+
+        This issue is public. Do not include vulnerability details, exploit steps,
+        credentials, raw logs, evidence bundles, host information, or other sensitive data.
+        State only that you need a private security contact.
+
+  - type: checkboxes
+    id: public_safety
+    attributes:
+      label: Public issue safety check
+      options:
+        - label: I understand this issue is public and I have not included sensitive vulnerability details.
+          required: true

@@ -10,6 +10,31 @@ from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.system_identity import build_system_document, parse_scan_result
 
 
+def test_status_blocks_export_for_invalid_optional_system_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied.raw"
+    raw.write_bytes(_matching_record("2026-10-01 10:00:01.000"))
+    assert main(["import", "--raw", str(raw)]) == 0
+    system = tmp_path / "data" / "system.json"
+    system.write_text("{}")
+    capsys.readouterr()
+
+    assert main(["status", "--raw", str(raw)]) == 0
+    output = capsys.readouterr().out
+    assert "System identity ..... invalid" in output
+    assert "Ready to export ..... NO" in output
+    assert "Correct the invalid system identity file" in output
+    assert main(["export"]) == 2
+    assert not (tmp_path / "data" / "evidence.zip").exists()
+
+    system.write_text(json.dumps(build_system_document(parse_scan_result(
+        "08;Vaillant;HMU00;0902;5103"
+    ))))
+    assert main(["status", "--raw", str(raw)]) == 0
+    assert "Ready to export ..... YES" in capsys.readouterr().out
+    assert main(["export"]) == 0
+
+
 def _record(timestamp: str) -> bytes:
     return f"{timestamp} <1008b50702090000\n".encode("ascii")
 
@@ -319,6 +344,43 @@ def test_export_automatically_includes_valid_system_identity(tmp_path, monkeypat
     verified = verify_bundle(data / "evidence.zip")
     assert verified["system_identity_included"] is True
     assert verified["context_raw_count"] == 0
+
+
+def test_export_reports_public_submission_pass(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied.raw"
+    raw.write_bytes(
+        _record("2026-10-01 10:00:00.000")
+        + _matching_record("2026-10-01 10:00:01.000")
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    capsys.readouterr()
+    assert main(["export"]) == 0
+    out = capsys.readouterr().out
+    assert "Public submission ... PASS" in out
+    assert "Ready to share." in out
+
+
+def test_export_keeps_valid_bundle_but_blocks_public_ready_with_raw_context(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied.raw"
+    raw.write_bytes(
+        _record("2026-10-01 10:00:00.000")
+        + _matching_record("2026-10-01 10:00:01.000")
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    capsys.readouterr()
+    assert main(["export", "--include-context-raw"]) == 0
+    out = capsys.readouterr().out
+    assert "Public submission ... NOT READY" in out
+    assert "raw context is not accepted" in out
+    assert "Ready to share." not in out
+    assert (tmp_path / "data" / "evidence.zip").is_file()
+    assert verify_bundle(tmp_path / "data" / "evidence.zip")["valid"] is True
 
 
 def test_export_requires_collected_evidence(tmp_path, monkeypatch, capsys):
