@@ -580,7 +580,7 @@ Maintainers reviewing untrusted public uploads should use:
 
 The stricter submission policy currently requires:
 
-- compressed ZIP size at or below 25 MiB;
+- compressed ZIP size at or below 25 MB (25,000,000 bytes), matching the public GitHub upload limit;
 - at most 1000 archive members;
 - at most 64 MiB total uncompressed content;
 - no encrypted ZIP members;
