@@ -143,14 +143,17 @@ class RawRecordSplitter:
                 continue
 
             if len(starts) >= 2:
-                end = starts[1]
-                if end > self.max_record_bytes:
-                    records.append(_OVERSIZE_RECORD_MARKER)
-                else:
-                    record = self._buffer[:end].strip()
-                    if record:
-                        records.append(record)
-                self._buffer = self._buffer[end:]
+                # Emit every complete record found by this scan. Emitting only
+                # one per scan rescans the whole buffer per record, which made
+                # splitting quadratic in the chunk size.
+                for begin, end in zip(starts, starts[1:]):
+                    if end - begin > self.max_record_bytes:
+                        records.append(_OVERSIZE_RECORD_MARKER)
+                    else:
+                        record = self._buffer[begin:end].strip()
+                        if record:
+                            records.append(record)
+                self._buffer = self._buffer[starts[-1] :]
                 continue
 
             if len(self._buffer) > self.max_record_bytes:
