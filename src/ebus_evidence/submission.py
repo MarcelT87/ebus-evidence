@@ -11,7 +11,7 @@ from ebus_evidence.bundle import BundleError, verify_bundle
 from ebus_evidence.profiles.loader import ProfileError, load_profile
 
 
-MAX_SUBMISSION_ARCHIVE_BYTES = 25 * 1024 * 1024
+MAX_SUBMISSION_ARCHIVE_BYTES = 25_000_000
 MAX_SUBMISSION_UNCOMPRESSED_BYTES = 64 * 1024 * 1024
 MAX_SUBMISSION_MEMBERS = 1000
 
@@ -56,7 +56,7 @@ def _preflight_submission_zip(path: Path) -> tuple[str, int, str]:
 
     if archive_size > MAX_SUBMISSION_ARCHIVE_BYTES:
         raise SubmissionError(
-            "submission ZIP exceeds the 25 MiB public upload policy"
+            "submission ZIP exceeds the 25 MB public upload policy"
         )
 
     try:
