@@ -36,7 +36,7 @@ The submission policy additionally rejects normal public contributions with:
 
 - archives above the public size limits;
 - excessive member count or uncompressed size;
-- encrypted ZIP members;
+- non-DEFLATE or encrypted ZIP members;
 - raw context members;
 - missing evidence state;
 - legacy/missing provenance;
