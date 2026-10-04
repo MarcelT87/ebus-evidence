@@ -779,14 +779,14 @@ def test_verify_reports_unsupported_zip_compression_as_bundle_error(tmp_path):
     unknown_method = (99).to_bytes(2, "little")
 
     # Local file header compression method.
-    assert data[local_header_offset : local_header_offset + 4] == b"PK\\x03\\x04"
+    assert data[local_header_offset : local_header_offset + 4] == b"PK\x03\x04"
     data[local_header_offset + 8 : local_header_offset + 10] = unknown_method
 
     # Matching central-directory entry compression method.
     position = 0
     patched_central = False
     while True:
-        central = data.find(b"PK\\x01\\x02", position)
+        central = data.find(b"PK\x01\x02", position)
         if central < 0:
             break
         name_length = int.from_bytes(data[central + 28 : central + 30], "little")
