@@ -16,6 +16,7 @@ from ebus_evidence.state import (
     StateError,
     load_state,
 )
+from ebus_evidence.submission import SubmissionError, verify_submission_bundle
 from ebus_evidence.system_identity import SystemIdentityError, load_system_document
 from ebus_evidence.timeutil import TimezoneError, get_timezone
 from ebus_evidence.watch import ResumeError, run_watch
@@ -655,6 +656,12 @@ def export(
         print(f"error: export failed: {exc}")
         return 2
 
+    submission_error: str | None = None
+    try:
+        verify_submission_bundle(output)
+    except (SubmissionError, BundleError) as exc:
+        submission_error = str(exc)
+
     print(f"Output .............. {output.resolve()}")
     print(f"Status .............. {'VALID' if verified['valid'] else 'INVALID'}")
     print(
@@ -695,6 +702,16 @@ def export(
     if verified.get("absolute_timestamps_included") is True:
         print("Absolute timestamps . yes")
     print(f"SHA256 .............. {created['sha256']}")
+    print(
+        "Public submission ... "
+        + ("PASS" if submission_error is None else f"NOT READY ({submission_error})")
+    )
     print()
-    print("Ready to share.")
+    if submission_error is None:
+        print("Ready to share.")
+    else:
+        print(
+            "Bundle created and structurally valid, but not ready for normal "
+            "public submission."
+        )
     return 0
