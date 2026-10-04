@@ -1,4 +1,4 @@
-from ebus_evidence.cli import build_parser
+from ebus_evidence.cli import build_parser, main
 
 
 def test_analyze_raw_is_optional_for_auto_discovery():
@@ -219,3 +219,21 @@ def test_verify_accepts_submission_policy_flag():
     )
     assert args.bundle == "/tmp/evidence.zip"
     assert args.submission is True
+
+
+def test_doctor_reports_blocked_docker_discovery(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "ebus_evidence.cli._discovered_raw_path",
+        lambda: (
+            None,
+            None,
+            "permission denied while running 'docker ps'; "
+            "the current user cannot access the Docker daemon",
+        ),
+    )
+
+    assert main(["doctor"]) == 2
+    output = capsys.readouterr().out
+    assert "ebusd ................. discovery blocked" in output
+    assert "Docker access ......... ERROR (permission denied" in output
+    assert "Use an account with Docker access" in output

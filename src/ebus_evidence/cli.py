@@ -7,7 +7,11 @@ from pathlib import Path
 
 from ebus_evidence import __version__
 from ebus_evidence.bundle import BundleError, create_bundle, verify_bundle
-from ebus_evidence.discovery.ebusd import EbusdDiscovery, discover_ebusd
+from ebus_evidence.discovery.ebusd import (
+    EbusdDiscovery,
+    diagnose_docker_access,
+    discover_ebusd,
+)
 from ebus_evidence.locking import StateWriterLock, StateWriterLockError
 from ebus_evidence.input.raw_file import (
     RawParseError,
@@ -112,6 +116,9 @@ def _print_discovery(discovery: EbusdDiscovery) -> None:
 def _discovered_raw_path() -> tuple[str | None, EbusdDiscovery | None, str | None]:
     discovery = discover_ebusd()
     if discovery is None:
+        docker_error = diagnose_docker_access()
+        if docker_error is not None:
+            return None, None, docker_error
         return None, None, "ebusd was not detected"
     if not discovery.raw_enabled:
         return None, discovery, "ebusd raw logging is not enabled"
@@ -139,10 +146,17 @@ def _doctor(args: argparse.Namespace) -> int:
     if raw_path is None:
         raw_path, discovered, error = _discovered_raw_path()
         if discovered is None:
-            print("ebusd ................. not detected")
-            print()
-            print("Automatic discovery currently supports Docker and native/systemd ebusd.")
-            print("Use --raw /path/to/ebusd.raw for a manual check.")
+            if error and error != "ebusd was not detected":
+                print("ebusd ................. discovery blocked")
+                print(f"Docker access ......... ERROR ({error})")
+                print()
+                print("Automatic Docker discovery could not inspect running containers.")
+                print("Use an account with Docker access, or use --raw /path/to/ebusd.raw.")
+            else:
+                print("ebusd ................. not detected")
+                print()
+                print("Automatic discovery currently supports Docker and native/systemd ebusd.")
+                print("Use --raw /path/to/ebusd.raw for a manual check.")
             return 2
 
         _print_discovery(discovered)
