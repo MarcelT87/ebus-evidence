@@ -167,13 +167,15 @@ includes `data/system.json` when it exists and is valid, writes:
 data/evidence.zip
 ```
 
-and immediately verifies it.
+and immediately verifies both the bundle and the normal public-submission policy.
 
 Expected successful result:
 
 ```text
 Status .............. VALID
 Deterministic ....... yes
+Public submission ... PASS
+
 Ready to share.
 ```
 
@@ -191,7 +193,8 @@ Open a GitHub issue using the **Evidence submission** form and upload the ZIP
 in its required `.zip` field.
 
 There is no verifier-output copy/paste step. `./evidence export` already
-verifies the generated bundle, and maintainers independently verify incoming
+verifies the generated bundle and should report `Public submission ... PASS`
+for the normal contribution path. Maintainers independently verify incoming
 files.
 
 Do not attach the complete `ebusd.raw` file.
