@@ -31,11 +31,16 @@ Public submission ... PASS
 Ready to share.
 ```
 
-You can verify it again explicitly if you want:
+You can run the same strict public-submission check again explicitly if you
+want:
 
 ```bash
-./evidence verify data/evidence.zip
+./evidence verify --submission data/evidence.zip
 ```
+
+For normal public sharing, this is the relevant manual re-check. The generic
+`./evidence verify data/evidence.zip` command checks the bundle-v1 structure
+without applying the additional public-submission policy.
 
 Do not submit a bundle that reports `INVALID` or
 `Public submission ... NOT READY (...)`.
