@@ -403,7 +403,7 @@ def _read_member(archive: zipfile.ZipFile, name: str) -> bytes:
         return archive.read(name)
     except KeyError as exc:
         raise BundleError(f"missing required bundle member: {name}") from exc
-    except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+    except (OSError, RuntimeError, NotImplementedError, zipfile.BadZipFile) as exc:
         raise BundleError(f"cannot read bundle member {name}: {exc}") from exc
 
 
@@ -738,6 +738,7 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
         deterministic_layout = (
             names == sorted(names)
             and all(info.date_time == _ZIP_TIME for info in infos)
+            and all(info.compress_type == zipfile.ZIP_DEFLATED for info in infos)
         )
 
     return {
