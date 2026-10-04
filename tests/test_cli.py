@@ -211,3 +211,11 @@ def test_export_uses_beginner_defaults():
     assert args.system == "data/system.json"
     assert args.output == "data/evidence.zip"
     assert args.include_context_raw is False
+
+
+def test_verify_accepts_submission_policy_flag():
+    args = build_parser().parse_args(
+        ["verify", "--submission", "/tmp/evidence.zip"]
+    )
+    assert args.bundle == "/tmp/evidence.zip"
+    assert args.submission is True

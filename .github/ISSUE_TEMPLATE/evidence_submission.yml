@@ -1,0 +1,72 @@
+name: Evidence submission
+description: Submit a generated evidence.zip for cross-installation review
+title: "Evidence: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for contributing passive eBUS evidence.
+
+        Attach only the generated `data/evidence.zip`. Do **not** attach a complete
+        `ebusd.raw`, credentials, host configuration, or other unrelated files.
+
+        This repository is public. Treat the uploaded ZIP and the information entered
+        below as publicly shared data.
+
+  - type: upload
+    id: evidence
+    attributes:
+      label: Evidence ZIP
+      description: Upload the generated data/evidence.zip. Do not upload ebusd.raw.
+    validations:
+      required: true
+      accept: ".zip"
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: ebusd environment
+      description: Where did the source raw log come from?
+      options:
+        - Docker
+        - Native Linux/systemd
+        - Home Assistant App/Add-on
+        - Remote/copied file from another host
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: evidence_path
+    attributes:
+      label: Evidence path
+      options:
+        - Live/growing raw log with collect
+        - Static/copied raw log with import
+    validations:
+      required: true
+
+  - type: input
+    id: product
+    attributes:
+      label: System/product model
+      description: Optional. Leave empty if unknown.
+      placeholder: "Example: Vaillant aroTHERM plus / HW5103"
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything unusual?
+      description: Optional. Mention interruptions, rotations or unusual operating conditions. Do not paste private host configuration.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy and submission check
+      options:
+        - label: I am attaching the generated evidence.zip, not the complete ebusd.raw file.
+          required: true
+        - label: I did not enable raw-context export unless it was specifically requested and I reviewed that data before sharing it.
+          required: true
+        - label: I understand that this issue and its attachment are public.
+          required: true

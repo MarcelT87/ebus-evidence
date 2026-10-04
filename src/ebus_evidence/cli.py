@@ -31,6 +31,7 @@ from ebus_evidence.simple_workflow import (
     import_raw as simple_import_raw,
     status as simple_status,
 )
+from ebus_evidence.submission import SubmissionError, verify_submission_bundle
 from ebus_evidence.system_identity import SystemIdentityError, create_system_document
 from ebus_evidence.watch import ResumeError, run_watch
 
@@ -557,7 +558,13 @@ def _bundle(args: argparse.Namespace) -> int:
 
 def _verify(args: argparse.Namespace) -> int:
     try:
-        result = verify_bundle(args.bundle)
+        if args.submission:
+            result = verify_submission_bundle(args.bundle)
+        else:
+            result = verify_bundle(args.bundle)
+    except SubmissionError as exc:
+        print(f"REJECTED: public submission policy: {exc}", file=sys.stderr)
+        return 2
     except BundleError as exc:
         print(f"INVALID: {exc}", file=sys.stderr)
         return 2
@@ -565,6 +572,8 @@ def _verify(args: argparse.Namespace) -> int:
     print("eBUS Evidence bundle verify")
     print(f"Bundle: {result['path']}")
     print("Status: VALID")
+    if args.submission:
+        print("Submission policy: PASS")
     print(f"SHA256: {result['sha256']}")
     print(f"Profile: {result['profile']} (v{result['profile_version']})")
     print(f"Created by tool version: {result['tool_version']}")
@@ -993,6 +1002,14 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument(
         "bundle",
         help="path to an ebus-evidence bundle ZIP",
+    )
+    verify.add_argument(
+        "--submission",
+        action="store_true",
+        help=(
+            "apply stricter public-submission policy: current bundled profile, "
+            "provenance, deterministic layout, no raw context, and tighter ZIP limits"
+        ),
     )
     verify.set_defaults(func=_verify)
 
