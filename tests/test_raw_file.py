@@ -138,3 +138,27 @@ def test_split_records_skips_oversized_record_without_large_pending_buffer(tmp_p
     with pytest.raises(RawParseError, match="safety limit"):
         parse_record(records[0])
     assert parse_record(records[1]).request == "020900"
+
+
+def test_incremental_splitter_scans_buffer_a_bounded_number_of_times(monkeypatch):
+    import ebus_evidence.input.raw_file as raw_file
+
+    pattern = raw_file._RECORD_START_RE
+    scans = 0
+
+    class CountingPattern:
+        def finditer(self, buffer):
+            nonlocal scans
+            scans += 1
+            return pattern.finditer(buffer)
+
+    monkeypatch.setattr(raw_file, "_RECORD_START_RE", CountingPattern())
+    data = b"".join(
+        b"2026-09-23 10:00:%02d.%03d <1008b50702090000\n" % (i // 1000 % 60, i % 1000)
+        for i in range(1000)
+    )
+
+    records = RawRecordSplitter().feed(data, flush=True)
+
+    assert len(records) == 1000
+    assert scans <= 3
