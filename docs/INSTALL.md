@@ -128,6 +128,9 @@ The installer:
 
 - checks for Python 3.11+;
 - creates a local `.venv` when needed;
+- reuses a healthy existing `.venv`;
+- automatically recreates a recognizable but unusable project-local `.venv`;
+- refuses to delete an unexpected directory or symbolic link named `.venv`;
 - installs the current checkout;
 - enables the local `./evidence` launcher.
 
@@ -146,6 +149,27 @@ Check:
 ```
 
 You do not need to activate the virtual environment when using `./evidence`.
+
+### Re-running the installer
+
+Running
+
+```bash
+bash install.sh
+```
+
+again is safe for normal upgrades.
+
+If the existing project-local `.venv` is healthy, it is reused. If it is a
+recognizable Python virtual environment but its Python/pip is missing,
+unsupported or unusable, only that disposable `.venv` is recreated.
+
+Runtime data such as `data/` and collected Evidence is not removed by this
+repair.
+
+If `.venv` is instead an unexpected ordinary directory or a symbolic link,
+the installer stops and asks you to move/remove it manually rather than
+deleting unknown files.
 
 ### Advanced/manual installation
 
