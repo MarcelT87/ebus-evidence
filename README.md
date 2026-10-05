@@ -20,10 +20,15 @@ eBUS adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
 
 > **Current research scope:** the parser works on normal ebusd message-mode raw
 > logs. Before a telegram can become a normal Frame or Evidence event, the
-> parser validates its eBUS master CRC and, when a response is present, its
-> response CRC. The bundled `hw5103-open-evidence` profile and current
+> parser validates the eBUS master CRC, response CRC, ACK/NAK state and complete
+> transaction framing. Message-mode logs are an ebusd-generated representation,
+> not a lossless wire capture; one known ebusd echo-logging artefact is handled
+> only when the remaining response CRC and final ACK independently prove the
+> transaction. The bundled `hw5103-open-evidence` profile and current
 > real-world validation are focused on **Vaillant-family systems**, especially
-> HW5103/HMU/VWZIO research paths.
+> HW5103/HMU/VWZIO research paths. See
+> **[Parser and validation status](docs/VALIDATION.md)** for the independent
+> multi-million-line cross-installation results.
 
 ## Beginner workflow
 
@@ -245,6 +250,7 @@ The adapter transport used by ebusd is outside the evidence boundary.
 - **[ebusd setup matrix](docs/EBUSD_SETUPS.md)** — Docker/native/remote layouts
 - **[System identity](docs/SYSTEM_IDENTITY.md)** — privacy-minimized hardware/firmware identity
 - **[Community test](docs/COMMUNITY_TEST.md)** — cross-installation contribution workflow
+- **[Parser and validation status](docs/VALIDATION.md)** — CRC/framing guarantees, known ebusd logging caveat and independent full-dataset validation
 - **[Submit evidence](docs/SUBMIT_EVIDENCE.md)** — upload a generated evidence ZIP through the structured public form
 - **[Bundle format v1](docs/BUNDLE_FORMAT.md)** — public ZIP/data contract for independent consumers
 - **[Home Assistant](docs/HOME_ASSISTANT.md)** — special file-based route for Home Assistant users
