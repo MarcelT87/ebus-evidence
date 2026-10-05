@@ -966,15 +966,23 @@ Examples include:
   `unexpected_transaction_direction` or
   `unexpected_transaction_tail` — the remaining ACK/direction framing is
   incomplete or contains bytes the parser cannot validate as one complete
-  transaction;
+  transaction. One narrow ebusd message-mode logging artefact is handled
+  explicitly: for an ebusd-initiated slave transaction whose request ends
+  on-wire in `00`, the logger can suppress the real slave ACK `00` as an
+  apparent echo. The parser accepts that representation only when the bytes
+  that follow form one complete CRC-valid slave response and ebusd's final
+  outgoing response ACK is present and valid;
 - `truncated_message_record` — ebusd marked the message-mode raw-log record
   with `...`, meaning the line is an explicitly truncated or continued log
   fragment and not a complete transaction.
 
 These are counted explicitly as non-frames rather than silently treated as
 valid evidence frames. CRC-invalid, NAK-bearing and incompletely framed
-transactions never create Evidence events. Retry-shaped records are currently
-handled fail-closed rather than being reconstructed into a second transaction.
+transactions never create Evidence events. The logger-omitted ACK exception
+does not synthesize a response or bypass CRC checks; it only recognizes a
+complete transaction whose response and final ACK independently validate.
+Retry-shaped records are currently handled fail-closed rather than being
+reconstructed into a second transaction.
 
 A small number can occur naturally in real long-running raw logs. A successful
 import should still show `Skipped = 0` unless an actually unsupported/malformed

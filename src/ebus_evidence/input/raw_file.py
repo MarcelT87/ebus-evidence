@@ -228,53 +228,17 @@ def _decode_direction_segment(value: str, label: str) -> bytes:
         raise RawParseError(str(exc)) from exc
 
 
-def _parse_ebusd_transaction(
-    segments: list[tuple[str, str]],
-    *,
-    expects_response: bool,
-) -> str | None:
-    """Validate direction changes for a transaction initiated by ebusd."""
-    if len(segments) == 1:
-        raise RawNonFrame(
-            "missing_command_ack",
-            "ebusd-initiated transaction is missing the command acknowledgement",
-        )
-
-    direction, incoming_hex = segments[1]
-    if direction != "<":
-        raise RawNonFrame(
-            "unexpected_transaction_direction",
-            "expected incoming command acknowledgement after ebusd request",
-        )
-
-    incoming = _decode_direction_segment(incoming_hex, "response")
-    pos = _consume_command_ack(incoming, 0)
-
-    if pos >= len(incoming):
-        if len(segments) != 2:
-            raise RawNonFrame(
-                "unexpected_transaction_tail",
-                "unexpected direction segment after command-only acknowledgement",
-            )
-        if expects_response:
-            raise RawNonFrame(
-                "missing_response",
-                "slave transaction ended after command ACK without a response",
-            )
-        return None
-    if not expects_response:
-        raise RawNonFrame(
-            "unexpected_transaction_tail",
-            "master-target transaction contains a response after the command acknowledgement",
-        )
-
-    response, pos = _parse_response(incoming, pos)
-    if pos != len(incoming):
+def _parse_complete_response_segment(data: bytes, pos: int) -> str | None:
+    response, end = _parse_response(data, pos)
+    if end != len(data):
         raise RawNonFrame(
             "unexpected_transaction_tail",
             "unexpected bytes remain in the incoming response segment",
         )
+    return response
 
+
+def _validate_ebusd_response_ack(segments: list[tuple[str, str]]) -> None:
     if len(segments) < 3:
         raise RawNonFrame(
             "missing_response_ack",
@@ -295,6 +259,74 @@ def _parse_ebusd_transaction(
             "unexpected bytes or direction segments remain after the final response acknowledgement",
         )
 
+
+def _parse_ebusd_transaction(
+    segments: list[tuple[str, str]],
+    *,
+    expects_response: bool,
+    command_ends_with_wire_zero: bool,
+) -> str | None:
+    """Validate direction changes for a transaction initiated by ebusd.
+
+    ebusd message-mode logging suppresses a received symbol when it equals the
+    immediately preceding sent wire symbol, because that symbol is treated as
+    an echo. If a request ends on-wire in 00, a real slave ACK 00 can therefore
+    disappear from the log. The narrow fallback below accepts that representation
+    only when the remaining incoming bytes form one complete CRC-valid response
+    and ebusd's final outgoing response ACK is present and valid.
+    """
+    if len(segments) == 1:
+        raise RawNonFrame(
+            "missing_command_ack",
+            "ebusd-initiated transaction is missing the command acknowledgement",
+        )
+
+    direction, incoming_hex = segments[1]
+    if direction != "<":
+        raise RawNonFrame(
+            "unexpected_transaction_direction",
+            "expected incoming command acknowledgement after ebusd request",
+        )
+
+    incoming = _decode_direction_segment(incoming_hex, "response")
+
+    if not expects_response:
+        pos = _consume_command_ack(incoming, 0)
+        if pos >= len(incoming):
+            if len(segments) != 2:
+                raise RawNonFrame(
+                    "unexpected_transaction_tail",
+                    "unexpected direction segment after command-only acknowledgement",
+                )
+            return None
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "master-target transaction contains a response after the command acknowledgement",
+        )
+
+    normal_error: RawNonFrame | None = None
+    try:
+        pos = _consume_command_ack(incoming, 0)
+        if pos >= len(incoming):
+            raise RawNonFrame(
+                "missing_response",
+                "slave transaction ended after command ACK without a response",
+            )
+        response = _parse_complete_response_segment(incoming, pos)
+        _validate_ebusd_response_ack(segments)
+        return response
+    except RawNonFrame as exc:
+        normal_error = exc
+
+    if not command_ends_with_wire_zero:
+        raise normal_error
+
+    try:
+        response = _parse_complete_response_segment(incoming, 0)
+    except RawNonFrame:
+        raise normal_error
+
+    _validate_ebusd_response_ack(segments)
     return response
 
 
@@ -501,7 +533,8 @@ def parse_record(record: bytes | str) -> Frame:
         raise RawParseError("master segment has an odd number of hex digits")
 
     try:
-        master = unescape_wire(bytes.fromhex(first_hex))
+        master_wire = bytes.fromhex(first_hex)
+        master = unescape_wire(master_wire)
     except ValueError as exc:
         raise RawParseError(str(exc)) from exc
 
@@ -573,6 +606,9 @@ def parse_record(record: bytes | str) -> Frame:
             response = _parse_ebusd_transaction(
                 segments,
                 expects_response=expects_response,
+                command_ends_with_wire_zero=bool(
+                    master_wire and master_wire[-1] == 0x00
+                ),
             )
 
     return Frame(
