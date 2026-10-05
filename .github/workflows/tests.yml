@@ -131,6 +131,7 @@ jobs:
         run: |
           git clone --no-local "$GITHUB_WORKSPACE" /tmp/ebus-evidence-contributor
           cd /tmp/ebus-evidence-contributor
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
           test ! -e .venv
           test ! -e data
@@ -195,21 +196,32 @@ jobs:
             exit 1
           fi
 
-      - name: Corrupt local state fails cleanly
+      - name: Corrupt local state is reported cleanly
         working-directory: /tmp/ebus-evidence-contributor
         run: |
           cp data/evidence-state.json /tmp/contributor-valid-state.json
           printf '{"format":' > data/evidence-state.json
-          if ./evidence status --raw /tmp/contributor-ebusd.raw             > /tmp/contributor-invalid-state.log 2>&1; then
-            cat /tmp/contributor-invalid-state.log
-            echo "status unexpectedly accepted a corrupt state file" >&2
+
+          ./evidence status --raw /tmp/contributor-ebusd.raw             > /tmp/contributor-invalid-state-status.log 2>&1
+          cat /tmp/contributor-invalid-state-status.log
+          grep -F "Evidence state ...... invalid" /tmp/contributor-invalid-state-status.log
+          grep -F "Ready to export ..... NO" /tmp/contributor-invalid-state-status.log
+          if grep -F "Traceback (most recent call last)" /tmp/contributor-invalid-state-status.log; then
+            echo "corrupt local state status leaked a Python traceback" >&2
             exit 1
           fi
-          cat /tmp/contributor-invalid-state.log
-          if grep -F "Traceback (most recent call last)" /tmp/contributor-invalid-state.log; then
-            echo "corrupt local state leaked a Python traceback" >&2
+
+          if ./evidence export > /tmp/contributor-invalid-state-export.log 2>&1; then
+            cat /tmp/contributor-invalid-state-export.log
+            echo "export unexpectedly accepted a corrupt state file" >&2
             exit 1
           fi
+          cat /tmp/contributor-invalid-state-export.log
+          if grep -F "Traceback (most recent call last)" /tmp/contributor-invalid-state-export.log; then
+            echo "corrupt local state export leaked a Python traceback" >&2
+            exit 1
+          fi
+
           mv /tmp/contributor-valid-state.json data/evidence-state.json
           ./evidence status --raw /tmp/contributor-ebusd.raw
 
