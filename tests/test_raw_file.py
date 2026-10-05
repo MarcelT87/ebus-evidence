@@ -22,7 +22,7 @@ def test_unescape_wire_handles_a9_and_aa():
 
 
 def test_parser_keeps_request_length_byte():
-    frame = parse_record(b"2026-09-23 10:00:00.000 <1008b5070209004f00")
+    frame = parse_record(b"2026-09-23 10:00:00.000 <1008b5070209004f00000000")
     assert frame.source == "10"
     assert frame.target == "08"
     assert frame.pbsb == "b507"
@@ -99,9 +99,9 @@ def test_parser_crc_checks_ebusd_initiated_response():
 @pytest.mark.parametrize(
     "record",
     [
-        b"2026-10-01 10:00:00.000 ...<1008b5070209004f00",
-        b"2026-10-01 10:00:00.000 <1008b5070209004f00...",
-        b"2026-10-01 10:00:00.000 <1008b5070209004f00...>00",
+        b"2026-10-01 10:00:00.000 ...<1008b5070209004f00000000",
+        b"2026-10-01 10:00:00.000 <1008b5070209004f00000000...",
+        b"2026-10-01 10:00:00.000 <1008b5070209004f00000000...>00",
     ],
 )
 def test_parser_rejects_ebusd_truncated_message_mode_fragments(record):
@@ -144,7 +144,7 @@ def test_parser_accepts_complete_broadcast_without_ack():
         ),
         (
             b"2026-10-01 10:00:00.000 "
-            b"<1008b5070209004fff1008b5070209004f00",
+            b"<1008b5070209004fff1008b5070209004f00000000",
             "negative_command_ack",
         ),
         (
@@ -241,8 +241,8 @@ def test_rotated_source_is_ordered_before_active(tmp_path):
 def test_split_record_buffer_keeps_tail_until_next_record():
     from ebus_evidence.input.raw_file import split_record_buffer
 
-    first = b"2026-10-01 10:00:00.000 <1008b5070209004f00"
-    second = b"2026-10-01 10:00:01.000 <1008b5070209004f00"
+    first = b"2026-10-01 10:00:00.000 <1008b5070209004f00000000"
+    second = b"2026-10-01 10:00:01.000 <1008b5070209004f00000000"
     records, tail = split_record_buffer(first + b"\n" + second)
 
     assert records == [first]
@@ -290,7 +290,7 @@ def test_incremental_splitter_skips_oversized_record_and_recovers():
         b"2026-10-01 10:00:00.000 <"
         + b"aa" * 100
     )
-    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00"
+    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00000000"
 
     first = splitter.feed(oversized)
     assert len(first) == 1
@@ -311,7 +311,7 @@ def test_split_records_skips_oversized_record_without_large_pending_buffer(tmp_p
         + b"aa" * 100
         + b"\n"
     )
-    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00\n"
+    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00000000\n"
     path.write_bytes(oversized + valid)
 
     records = list(
@@ -342,7 +342,7 @@ def test_incremental_splitter_scans_buffer_a_bounded_number_of_times(monkeypatch
 
     monkeypatch.setattr(raw_file, "_RECORD_START_RE", CountingPattern())
     data = b"".join(
-        b"2026-09-23 10:00:%02d.%03d <1008b5070209004f00\n" % (i // 1000 % 60, i % 1000)
+        b"2026-09-23 10:00:%02d.%03d <1008b5070209004f00000000\n" % (i // 1000 % 60, i % 1000)
         for i in range(1000)
     )
 
