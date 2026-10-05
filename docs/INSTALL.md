@@ -199,6 +199,13 @@ If discovery does not fit your installation, use a file explicitly:
 
 `ebus-evidence` needs normal ebusd **message-mode** raw logging.
 
+Message mode is an ebusd-generated transaction representation rather than a
+lossless physical-wire capture. The parser therefore validates CRCs and
+transaction framing before creating Evidence and contains one narrow,
+fail-closed compatibility path for the currently known ebusd echo-logging
+artefact documented in [ebusd setups](EBUSD_SETUPS.md#message-mode-is-not-a-lossless-wire-capture).
+You do not need to change a working ebusd setup for that case.
+
 Do not use:
 
 ```text
@@ -609,7 +616,8 @@ Check:
 
 Validated/supported input:
 
-- normal ebusd message-mode raw log;
+- normal ebusd message-mode raw log, with CRC/ACK/NAK/transaction-framing
+  validation before records can become Evidence;
 - Docker/native local file;
 - copied/static message-mode raw-log file through `import`;
 - read-only mounted growing raw-log file through `collect`;
