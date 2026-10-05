@@ -95,6 +95,93 @@ def test_parser_crc_checks_ebusd_initiated_response():
     assert frame.response == "080201ba0820000000"
 
 
+@pytest.mark.parametrize(
+    ("command_hex", "request"),
+    [
+        # Logical request CRC 00: the final on-wire symbol is 00.
+        ("f115b509010500", "0105"),
+        # Logical request CRC A9 is byte-stuffed as A9 00 on wire.
+        ("f115b50901aca900", "01ac"),
+    ],
+)
+def test_parser_recovers_ebusd_logger_omitted_command_ack_when_wire_ends_zero(
+    command_hex, request
+):
+    frame = parse_record(
+        f"2026-10-01 10:00:00.000 >{command_hex}<0142d9>00"
+    )
+    assert frame.initiated_by_ebusd is True
+    assert frame.target == "15"
+    assert frame.request == request
+    assert frame.response == "0142"
+
+
+def test_parser_prefers_explicit_command_ack_when_wire_ends_zero():
+    frame = parse_record(
+        b"2026-10-01 10:00:00.000 "
+        b">f115b509010500<000142d9>00"
+    )
+    assert frame.request == "0105"
+    assert frame.response == "0142"
+
+
+@pytest.mark.parametrize(
+    "command_hex",
+    [
+        # Logical request CRC AA is byte-stuffed as A9 01, so the final wire
+        # symbol is not 00 and the logger-omission fallback must stay disabled.
+        "f115b50901afa901",
+        # Ordinary CRC 34 likewise does not qualify for the fallback.
+        "f115b509013134",
+    ],
+)
+def test_parser_does_not_recover_omitted_ack_when_request_wire_does_not_end_zero(
+    command_hex,
+):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(
+            f"2026-10-01 10:00:00.000 >{command_hex}<0142d9>00"
+        )
+    assert excinfo.value.kind == "invalid_command_ack"
+
+
+def test_parser_does_not_use_wire_zero_fallback_for_passive_traffic():
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(
+            b"2026-10-01 10:00:00.000 "
+            b"<f115b5090105000142d900"
+        )
+    assert excinfo.value.kind == "invalid_command_ack"
+
+
+def test_parser_wire_zero_fallback_requires_crc_valid_response():
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(
+            b"2026-10-01 10:00:00.000 "
+            b">f115b509010500<0142d8>00"
+        )
+    # The omission hypothesis is not proven when the direct response CRC fails,
+    # so preserve the normal framing failure instead of accepting the record.
+    assert excinfo.value.kind == "invalid_command_ack"
+
+
+@pytest.mark.parametrize(
+    ("suffix", "kind"),
+    [
+        ("", "missing_response_ack"),
+        (">ff", "negative_response_ack"),
+        (">00<00", "unexpected_transaction_tail"),
+    ],
+)
+def test_parser_wire_zero_fallback_requires_exact_final_response_ack(suffix, kind):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(
+            "2026-10-01 10:00:00.000 "
+            f">f115b509010500<0142d9{suffix}"
+        )
+    assert excinfo.value.kind == kind
+
+
 
 @pytest.mark.parametrize(
     "record",
