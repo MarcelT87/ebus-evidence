@@ -96,9 +96,26 @@ def test_parser_crc_checks_ebusd_initiated_response():
 
 
 
+def test_parser_accepts_complete_broadcast_without_ack():
+    frame = parse_record(
+        b"2026-10-01 10:00:00.000 <10feb5050427a90015a90177"
+    )
+    assert frame.target == "fe"
+    assert frame.request == "0427a915aa"
+    assert frame.response is None
+
+
 @pytest.mark.parametrize(
     ("record", "kind"),
     [
+        (
+            b"2026-10-01 10:00:00.000 <1008b5070209004f",
+            "missing_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 <10feb5050427a90015a9017700",
+            "unexpected_transaction_tail",
+        ),
         (
             b"2026-10-01 10:00:00.000 <1008b5070209004fff",
             "negative_command_ack",
@@ -136,6 +153,14 @@ def test_parser_rejects_passive_nak_retry_and_invalid_transaction_tails(
 @pytest.mark.parametrize(
     ("record", "kind"),
     [
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834",
+            "missing_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834>00",
+            "unexpected_transaction_direction",
+        ),
         (
             b"2026-10-01 10:00:00.000 >f108b50905540200ba0834<ff",
             "negative_command_ack",
