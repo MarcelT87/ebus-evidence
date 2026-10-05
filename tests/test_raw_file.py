@@ -118,6 +118,15 @@ def test_parser_rejects_unparsed_text_between_segments():
         )
 
 
+def test_parser_accepts_master_target_command_with_ack_only():
+    frame = parse_record(
+        b"2026-10-01 10:00:00.000 <1031b5070209001a00"
+    )
+    assert frame.target == "31"
+    assert frame.request == "020900"
+    assert frame.response is None
+
+
 def test_parser_accepts_complete_broadcast_without_ack():
     frame = parse_record(
         b"2026-10-01 10:00:00.000 <10feb5050427a90015a90177"
@@ -133,6 +142,10 @@ def test_parser_accepts_complete_broadcast_without_ack():
         (
             b"2026-10-01 10:00:00.000 <1008b5070209004f",
             "missing_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 <1008b5070209004f00",
+            "missing_response",
         ),
         (
             b"2026-10-01 10:00:00.000 <10feb5050427a90015a9017700",
@@ -178,6 +191,10 @@ def test_parser_rejects_passive_nak_retry_and_invalid_transaction_tails(
         (
             b"2026-10-01 10:00:00.000 >f108b50905540200ba0834",
             "missing_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834<00",
+            "missing_response",
         ),
         (
             b"2026-10-01 10:00:00.000 >f108b50905540200ba0834>00",
