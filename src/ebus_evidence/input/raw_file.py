@@ -181,9 +181,6 @@ def _consume_response_ack(data: bytes, pos: int) -> int:
 
 def _parse_passive_transaction(data: bytes, pos: int) -> str | None:
     """Validate the post-command bytes of one passive message-mode transaction."""
-    if pos >= len(data):
-        return None
-
     pos = _consume_command_ack(data, pos)
     if pos >= len(data):
         return None
@@ -210,7 +207,10 @@ def _decode_direction_segment(value: str, label: str) -> bytes:
 def _parse_ebusd_transaction(segments: list[tuple[str, str]]) -> str | None:
     """Validate direction changes for a transaction initiated by ebusd."""
     if len(segments) == 1:
-        return None
+        raise RawNonFrame(
+            "missing_command_ack",
+            "ebusd-initiated transaction is missing the command acknowledgement",
+        )
 
     direction, incoming_hex = segments[1]
     if direction != "<":
@@ -483,6 +483,7 @@ def parse_record(record: bytes | str) -> Frame:
     pbsb = f"{master[2]:02x}{master[3]:02x}"
     request = master[4:request_end].hex()
     response = None
+    is_broadcast = master[1] == 0xFE
 
     if first_direction == "<":
         if len(segments) != 1:
@@ -490,14 +491,28 @@ def parse_record(record: bytes | str) -> Frame:
                 "unexpected_transaction_tail",
                 "passive transaction contains additional direction segments",
             )
-        response = _parse_passive_transaction(master, request_end + 1)
+        if is_broadcast:
+            if request_end + 1 != len(master):
+                raise RawNonFrame(
+                    "unexpected_transaction_tail",
+                    "broadcast transaction contains bytes after the master CRC",
+                )
+        else:
+            response = _parse_passive_transaction(master, request_end + 1)
     else:
         if request_end + 1 != len(master):
             raise RawNonFrame(
                 "unexpected_transaction_tail",
                 "ebusd-initiated command segment contains bytes after the master CRC",
             )
-        response = _parse_ebusd_transaction(segments)
+        if is_broadcast:
+            if len(segments) != 1:
+                raise RawNonFrame(
+                    "unexpected_transaction_tail",
+                    "broadcast transaction contains acknowledgement/response segments",
+                )
+        else:
+            response = _parse_ebusd_transaction(segments)
 
     return Frame(
         timestamp=timestamp,
