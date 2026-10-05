@@ -95,6 +95,87 @@ def test_parser_crc_checks_ebusd_initiated_response():
     assert frame.response == "080201ba0820000000"
 
 
+
+@pytest.mark.parametrize(
+    ("record", "kind"),
+    [
+        (
+            b"2026-10-01 10:00:00.000 <1008b5070209004fff",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<1008b5070209004fff1008b5070209004f00",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<f108b50905540200a80ead00080201a80e0000b04075ff",
+            "negative_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<f108b50905540200a80ead00080201a80e0000b04075",
+            "missing_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<f108b50905540200a80ead00080201a80e0000b040750001",
+            "unexpected_transaction_tail",
+        ),
+    ],
+)
+def test_parser_rejects_passive_nak_retry_and_invalid_transaction_tails(
+    record, kind
+):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(record)
+    assert excinfo.value.kind == kind
+
+
+@pytest.mark.parametrize(
+    ("record", "kind"),
+    [
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834<ff",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<ff"
+            b">f108b50905540200ba0834<00080201ba0820000000e7>00",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<00080201ba0820000000e7>ff",
+            "negative_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<00080201ba0820000000e7",
+            "missing_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<00080201ba0820000000e7>0001",
+            "unexpected_transaction_tail",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba083400<00080201ba0820000000e7>00",
+            "unexpected_transaction_tail",
+        ),
+    ],
+)
+def test_parser_rejects_ebusd_nak_retry_and_invalid_transaction_tails(
+    record, kind
+):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(record)
+    assert excinfo.value.kind == kind
+
+
 def test_split_records_reads_complete_closed_file():
     records = list(split_records(FIXTURE, chunk_size=17))
     assert len(records) == 5
