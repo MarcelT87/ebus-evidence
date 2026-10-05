@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+from ebus_evidence.structure import StructureLimitError, validate_structure_limits
+
 
 class ProfileError(ValueError):
     pass
@@ -98,4 +100,10 @@ def load_profile(path_or_name: str | Path) -> dict[str, Any]:
         data = yaml.safe_load(_read_profile_text(path_or_name))
     except yaml.YAMLError as exc:
         raise ProfileError(f"cannot parse profile: {exc}") from exc
+    except RecursionError as exc:
+        raise ProfileError("cannot parse profile: structure is too deeply nested") from exc
+    try:
+        validate_structure_limits(data, label="profile")
+    except StructureLimitError as exc:
+        raise ProfileError(str(exc)) from exc
     return validate_profile_data(data)
