@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ebus_evidence.structure import StructureLimitError, validate_structure_limits
+
 
 _SYSTEM_FORMAT = "ebus-evidence-system-v1"
 _ADDRESS_RE = re.compile(r"^[0-9a-fA-F]{2}$")
@@ -265,6 +267,14 @@ def load_system_document(path: str | Path) -> dict[str, Any]:
         data = json.loads(system_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SystemIdentityError(f"cannot read system identity: {exc}") from exc
+    except RecursionError as exc:
+        raise SystemIdentityError(
+            "cannot read system identity: structure is too deeply nested"
+        ) from exc
+    try:
+        validate_structure_limits(data, label="system identity")
+    except StructureLimitError as exc:
+        raise SystemIdentityError(str(exc)) from exc
     return validate_system_document(data)
 
 
