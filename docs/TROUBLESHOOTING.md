@@ -952,10 +952,15 @@ Examples include:
 
 - `short_fragment` — too few bus bytes to form a complete frame;
 - `truncated_request` — the telegram declares more request bytes than are
-  actually present.
+  actually present;
+- `missing_master_crc` / `invalid_master_crc` — the request has no usable
+  master CRC or the CRC does not match;
+- `truncated_response` / `missing_response_crc` /
+  `invalid_response_crc` — a present response is incomplete or fails its
+  eBUS CRC check.
 
 These are counted explicitly as non-frames rather than silently treated as
-valid evidence frames.
+valid evidence frames. CRC-invalid records never create Evidence events.
 
 A small number can occur naturally in real long-running raw logs. A successful
 import should still show `Skipped = 0` unless an actually unsupported/malformed

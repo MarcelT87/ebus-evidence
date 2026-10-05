@@ -16,7 +16,7 @@ from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.watch import run_watch
 
 
-def _record(timestamp: str, payload: str = "1008b50702090000") -> bytes:
+def _record(timestamp: str, payload: str = "1008b5070209004f00") -> bytes:
     return f"{timestamp} <{payload}\n".encode("ascii")
 
 
@@ -236,7 +236,7 @@ def test_watch_integration_captures_real_ba08_nonzero(tmp_path, monkeypatch):
                 handle.write(
                     _record(
                         "2026-10-01 10:00:00.000",
-                        "f108b50905540200ba080000080201ba0820000000",
+                        "f108b50905540200ba083400080201ba0820000000e700",
                     )
                 )
                 handle.write(_record("2026-10-01 10:00:01.000"))
@@ -294,7 +294,7 @@ def test_final_tail_record_can_complete_watch_context_window(tmp_path, monkeypat
                 handle.write(
                     _record(
                         "2026-10-01 10:00:00.000",
-                        "f108b50905540200ba080000080201ba0820000000",
+                        "f108b50905540200ba083400080201ba0820000000e700",
                     )
                 )
                 handle.write(_record("2026-10-01 10:00:30.000"))

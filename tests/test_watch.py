@@ -12,7 +12,7 @@ ROOT = Path(__file__).parents[1]
 
 
 def _record(timestamp: str) -> bytes:
-    return f"{timestamp} <1008b50702090000\n".encode("ascii")
+    return f"{timestamp} <1008b5070209004f00\n".encode("ascii")
 
 
 def test_follower_reads_only_new_records_by_default(tmp_path):
@@ -74,7 +74,7 @@ def test_follower_survives_rename_create_rotation(tmp_path):
 def test_watch_event_decodes_profile_value():
     profile = load_profile("hw5103-open-evidence")
     frame = parse_record(
-        b"2026-10-01 10:00:00.000 <f108b50905540200ba080000080201ba0820000000"
+        b"2026-10-01 10:00:00.000 <f108b50905540200ba083400080201ba0820000000e700"
     )
 
     events = frame_events(

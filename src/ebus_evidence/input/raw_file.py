@@ -56,6 +56,79 @@ def unescape_wire(data: bytes) -> bytes:
     return bytes(out)
 
 
+def _crc_update(crc: int, value: int) -> int:
+    """Update eBUS CRC-8 for one on-wire byte."""
+    for _ in range(8):
+        if crc & 0x80:
+            crc = ((crc << 1) ^ 0x9B) & 0xFF
+        else:
+            crc = (crc << 1) & 0xFF
+    return crc ^ value
+
+
+def calculate_ebus_crc(data: bytes) -> int:
+    """Calculate eBUS CRC-8 using the same byte-stuffing rules as ebusd.
+
+    The input contains logical/unescaped symbols. eBUS byte stuffing is part of
+    the CRC calculation, so logical A9/AA symbols are expanded to A9 00/A9 01
+    before updating the checksum.
+    """
+    crc = 0
+    for value in data:
+        if value == 0xA9:
+            crc = _crc_update(crc, 0xA9)
+            crc = _crc_update(crc, 0x00)
+        elif value == 0xAA:
+            crc = _crc_update(crc, 0xA9)
+            crc = _crc_update(crc, 0x01)
+        else:
+            crc = _crc_update(crc, value)
+    return crc
+
+
+def _validate_crc(payload: bytes, observed: int, *, kind: str, label: str) -> None:
+    expected = calculate_ebus_crc(payload)
+    if observed != expected:
+        raise RawNonFrame(
+            kind,
+            f"{label} CRC mismatch: expected {expected:02x}, observed {observed:02x}",
+        )
+
+
+def _parse_response(data: bytes, pos: int) -> str | None:
+    """Parse and CRC-check one optional response at pos."""
+    if pos >= len(data):
+        return None
+
+    response_length = data[pos]
+    if response_length > 32:
+        raise RawNonFrame(
+            "invalid_response_length",
+            f"response length {response_length} exceeds supported eBUS payload size",
+        )
+
+    response_end = pos + 1 + response_length
+    if response_end > len(data):
+        raise RawNonFrame(
+            "truncated_response",
+            "declared response length exceeds available telegram bytes",
+        )
+    if response_end == len(data):
+        raise RawNonFrame(
+            "missing_response_crc",
+            "response payload is present but response CRC is missing",
+        )
+
+    response = data[pos:response_end]
+    _validate_crc(
+        response,
+        data[response_end],
+        kind="invalid_response_crc",
+        label="response",
+    )
+    return response.hex()
+
+
 def resolve_raw_sources(path: str | Path, include_rotated: bool = False) -> list[Path]:
     """Return raw sources in chronological order.
 
@@ -261,6 +334,18 @@ def parse_record(record: bytes | str) -> Frame:
             "truncated_request",
             "declared request length exceeds available telegram bytes",
         )
+    if request_end == len(master):
+        raise RawNonFrame(
+            "missing_master_crc",
+            "complete request payload is present but master CRC is missing",
+        )
+
+    _validate_crc(
+        master[:request_end],
+        master[request_end],
+        kind="invalid_master_crc",
+        label="master",
+    )
 
     source = f"{master[0]:02x}"
     target = f"{master[1]:02x}"
@@ -268,26 +353,25 @@ def parse_record(record: bytes | str) -> Frame:
     request = master[4:request_end].hex()
     response = None
 
-    try:
-        if first_direction == "<":
-            pos = request_end + 1
-            if pos < len(master) and master[pos] in (0x00, 0xFF):
-                pos += 1
-            if pos < len(master):
-                response_length = master[pos]
-                if response_length <= 32 and pos + 1 + response_length <= len(master):
-                    response = master[pos : pos + 1 + response_length].hex()
-        else:
-            incoming = next((value for direction, value in segments[1:] if direction == "<"), None)
-            if incoming and len(incoming) % 2 == 0:
+    if first_direction == "<":
+        pos = request_end + 1
+        if pos < len(master) and master[pos] in (0x00, 0xFF):
+            pos += 1
+        response = _parse_response(master, pos)
+    else:
+        incoming = next(
+            (value for direction, value in segments[1:] if direction == "<"),
+            None,
+        )
+        if incoming:
+            if len(incoming) % 2:
+                raise RawParseError("response segment has an odd number of hex digits")
+            try:
                 slave = unescape_wire(bytes.fromhex(incoming))
-                pos = 1 if slave and slave[0] in (0x00, 0xFF) else 0
-                if pos < len(slave):
-                    response_length = slave[pos]
-                    if response_length <= 32 and pos + 1 + response_length <= len(slave):
-                        response = slave[pos : pos + 1 + response_length].hex()
-    except (RawParseError, ValueError):
-        response = None
+            except ValueError as exc:
+                raise RawParseError(str(exc)) from exc
+            pos = 1 if slave and slave[0] in (0x00, 0xFF) else 0
+            response = _parse_response(slave, pos)
 
     return Frame(
         timestamp=timestamp,

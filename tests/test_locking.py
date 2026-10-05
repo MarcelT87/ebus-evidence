@@ -12,13 +12,13 @@ from ebus_evidence.locking import (
 
 
 def _record(timestamp: str) -> bytes:
-    return f"{timestamp} <1008b50702090000\n".encode("ascii")
+    return f"{timestamp} <1008b5070209004f00\n".encode("ascii")
 
 
 def _matching_record(timestamp: str) -> bytes:
     return (
         f"{timestamp} "
-        "<f108b50905540200ba080000080201ba0820000000\n"
+        "<f108b50905540200ba083400080201ba0820000000e700\n"
     ).encode("ascii")
 
 

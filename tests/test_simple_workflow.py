@@ -36,13 +36,13 @@ def test_status_blocks_export_for_invalid_optional_system_file(tmp_path, monkeyp
 
 
 def _record(timestamp: str) -> bytes:
-    return f"{timestamp} <1008b50702090000\n".encode("ascii")
+    return f"{timestamp} <1008b5070209004f00\n".encode("ascii")
 
 
 def _matching_record(timestamp: str) -> bytes:
     return (
         f"{timestamp} "
-        "<f108b50905540200ba080000080201ba0820000000\n"
+        "<f108b50905540200ba083400080201ba0820000000e700\n"
     ).encode("ascii")
 
 
@@ -627,6 +627,39 @@ def test_static_import_restores_empty_context_dir_if_context_publish_fails(
     assert not state_path.exists()
     assert context_dir.is_dir()
     assert list(context_dir.iterdir()) == []
+
+
+def test_static_import_excludes_real_issue22_crc_invalid_b512_records(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "copied-ebusd.raw"
+    raw.write_bytes(
+        b"2026-09-05 00:28:14.482 <0376b51206130010000006d2000200ffd300\n"
+        b"2026-09-05 00:28:23.183 <0376b5120613001000000200bc0210ff0d00\n"
+        b"2026-06-24 05:52:39.239 <0376b5120613000c000006d6000200ffd300\n"
+        b"2026-06-24 05:52:47.711 <0376b5120613000c000009ff0000ff5e00\n"
+    )
+
+    assert main(["import", "--raw", str(raw)]) == 0
+    out = capsys.readouterr().out
+
+    assert "Non-frames ............ 2" in out
+    assert "Skipped ............... 0" in out
+    assert "invalid_master_crc" in out
+
+    profile = load_profile("hw5103-open-evidence")
+    state = EvidenceStateStore.open(
+        tmp_path / "data" / "evidence-state.json",
+        profile,
+    )
+    observation = state.state["observation"]
+    assert observation["frames_seen"] == 2
+    assert observation["non_frames"] == 2
+    assert state.state["checks"]["vwzio_b512_states"]["matches"] == 2
+    values = state.state["checks"]["vwzio_b512_states"]["values"]
+    assert set(values) == {"6"}
+    assert values["6"]["count"] == 2
 
 
 def test_static_import_reports_truncated_requests_as_non_frames(

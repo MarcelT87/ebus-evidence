@@ -19,8 +19,10 @@ eBUS adapter -> normal ebusd -> message-mode raw log -> ebus-evidence
 ```
 
 > **Current research scope:** the parser works on normal ebusd message-mode raw
-> logs. The bundled `hw5103-open-evidence` profile and current real-world
-> validation are focused on **Vaillant-family systems**, especially
+> logs. Before a telegram can become a normal Frame or Evidence event, the
+> parser validates its eBUS master CRC and, when a response is present, its
+> response CRC. The bundled `hw5103-open-evidence` profile and current
+> real-world validation are focused on **Vaillant-family systems**, especially
 > HW5103/HMU/VWZIO research paths.
 
 ## Beginner workflow
