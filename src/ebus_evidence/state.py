@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ebus_evidence.structure import StructureLimitError, validate_structure_limits
+
 
 _STATE_FORMAT = "ebus-evidence-state-v1"
 
@@ -347,6 +349,12 @@ def _load_state(
         data = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise StateError(f"cannot read state: {exc}") from exc
+    except RecursionError as exc:
+        raise StateError("cannot read state: structure is too deeply nested") from exc
+    try:
+        validate_structure_limits(data, label="evidence state")
+    except StructureLimitError as exc:
+        raise StateError(str(exc)) from exc
     if not isinstance(data, dict):
         raise StateError("state root must be a mapping")
 

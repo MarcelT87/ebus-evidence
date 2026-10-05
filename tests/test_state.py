@@ -283,3 +283,13 @@ def test_old_state_without_observation_is_backward_compatible(tmp_path):
     assert loaded["observation"]["frames_seen"] == 0
     assert loaded["observation"]["passive_frames"] == 0
     assert loaded["observation"]["ebusd_initiated_frames"] == 0
+
+
+def test_state_rejects_excessively_nested_local_structure(tmp_path):
+    path = tmp_path / "state.json"
+    base = json.dumps(new_state(PROFILE), sort_keys=True)[:-1]
+    nested = '{"x":' * 80 + '0' + '}' * 80
+    path.write_text(base + ',"deep":' + nested + '}', encoding="utf-8")
+
+    with pytest.raises(StateError, match="maximum nesting depth"):
+        load_state(path, PROFILE)
