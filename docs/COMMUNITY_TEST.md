@@ -23,6 +23,22 @@ The test does not require:
 - Home Assistant;
 - an analyzer database.
 
+## What the current parser validates
+
+A record becomes a normal Frame/Evidence candidate only after the parser can
+validate the request CRC and, where applicable, response CRC, ACK/NAK state and
+complete transaction framing.
+
+Incomplete, CRC-invalid, NAK-bearing or otherwise unprovable transactions are
+counted separately as `non_frames` instead of being silently promoted into
+Evidence. A clean import can therefore contain many non-frames while still
+reporting `skipped=0`.
+
+The supported ebusd message-mode log is not assumed to be a lossless wire
+capture. Known logger-specific behaviour is handled only when the remaining
+transaction can still be validated without guessing missing data. See
+[Parser and validation status](VALIDATION.md).
+
 ## 1. Install
 
 Choose any directory where your user can write. The home directory is only the

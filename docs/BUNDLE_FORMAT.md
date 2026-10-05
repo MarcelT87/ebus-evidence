@@ -77,6 +77,18 @@ The v1 verifier rejects:
 The verifier also checks that context raw-file references are safe filenames and
 cannot traverse outside the `contexts/` namespace.
 
+Structured JSON/YAML-style content is additionally bounded before deeper
+processing:
+
+- maximum nesting depth: 64;
+- maximum traversed structure size: 1,000,000 nodes;
+- repeated/cyclic container references are rejected.
+
+These limits are robustness protections against pathological but small inputs
+that could otherwise exhaust Python recursion or excessive traversal work.
+Parsing/serialization recursion failures are converted into controlled bundle
+validation errors rather than escaping as interpreter tracebacks.
+
 ## Deterministic layout
 
 Bundles created by the current exporter use:
