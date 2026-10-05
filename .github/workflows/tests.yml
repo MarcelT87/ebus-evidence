@@ -113,6 +113,123 @@ jobs:
           PY
 
 
+  contributor-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+
+      - name: Create a separate fresh contributor checkout
+        run: |
+          git clone --no-local "$GITHUB_WORKSPACE" /tmp/ebus-evidence-contributor
+          cd /tmp/ebus-evidence-contributor
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          test ! -e .venv
+          test ! -e data
+          test ! -e evidence
+
+      - name: Install from the fresh checkout
+        working-directory: /tmp/ebus-evidence-contributor
+        run: |
+          bash install.sh
+          ./evidence --version
+          ./evidence --help >/dev/null
+
+      - name: Run the public static-import workflow
+        working-directory: /tmp/ebus-evidence-contributor
+        run: |
+          cp tests/fixtures/sample.raw /tmp/contributor-ebusd.raw
+          sha256sum /tmp/contributor-ebusd.raw > /tmp/contributor-ebusd.sha256
+
+          ./evidence doctor             --raw /tmp/contributor-ebusd.raw             --profile hw5103-open-evidence
+
+          ./evidence import             --raw /tmp/contributor-ebusd.raw
+
+          sha256sum -c /tmp/contributor-ebusd.sha256
+
+          ./evidence status             --raw /tmp/contributor-ebusd.raw
+
+          ./evidence export
+
+          ./evidence verify data/evidence.zip
+          ./evidence verify --submission data/evidence.zip
+
+          test -f data/evidence-state.json
+          test -f data/evidence.zip
+
+      - name: Missing raw input fails cleanly
+        working-directory: /tmp/ebus-evidence-contributor
+        run: |
+          if ./evidence doctor             --raw /tmp/does-not-exist-ebusd.raw             --profile hw5103-open-evidence             > /tmp/contributor-missing-raw.log 2>&1; then
+            cat /tmp/contributor-missing-raw.log
+            echo "doctor unexpectedly accepted a missing raw log" >&2
+            exit 1
+          fi
+          cat /tmp/contributor-missing-raw.log
+          if grep -F "Traceback (most recent call last)" /tmp/contributor-missing-raw.log; then
+            echo "missing raw input leaked a Python traceback" >&2
+            exit 1
+          fi
+
+      - name: Invalid bundle fails cleanly
+        working-directory: /tmp/ebus-evidence-contributor
+        run: |
+          printf 'not a zip\n' > /tmp/not-an-evidence-bundle.zip
+          if ./evidence verify /tmp/not-an-evidence-bundle.zip             > /tmp/contributor-invalid-bundle.log 2>&1; then
+            cat /tmp/contributor-invalid-bundle.log
+            echo "verify unexpectedly accepted an invalid ZIP" >&2
+            exit 1
+          fi
+          cat /tmp/contributor-invalid-bundle.log
+          grep -F "INVALID:" /tmp/contributor-invalid-bundle.log
+          if grep -F "Traceback (most recent call last)" /tmp/contributor-invalid-bundle.log; then
+            echo "invalid bundle leaked a Python traceback" >&2
+            exit 1
+          fi
+
+      - name: Corrupt local state is reported cleanly
+        working-directory: /tmp/ebus-evidence-contributor
+        run: |
+          cp data/evidence-state.json /tmp/contributor-valid-state.json
+          printf '{"format":' > data/evidence-state.json
+
+          ./evidence status --raw /tmp/contributor-ebusd.raw             > /tmp/contributor-invalid-state-status.log 2>&1
+          cat /tmp/contributor-invalid-state-status.log
+          grep -F "Evidence state ...... invalid" /tmp/contributor-invalid-state-status.log
+          grep -F "Ready to export ..... NO" /tmp/contributor-invalid-state-status.log
+          if grep -F "Traceback (most recent call last)" /tmp/contributor-invalid-state-status.log; then
+            echo "corrupt local state status leaked a Python traceback" >&2
+            exit 1
+          fi
+
+          if ./evidence export > /tmp/contributor-invalid-state-export.log 2>&1; then
+            cat /tmp/contributor-invalid-state-export.log
+            echo "export unexpectedly accepted a corrupt state file" >&2
+            exit 1
+          fi
+          cat /tmp/contributor-invalid-state-export.log
+          if grep -F "Traceback (most recent call last)" /tmp/contributor-invalid-state-export.log; then
+            echo "corrupt local state export leaked a Python traceback" >&2
+            exit 1
+          fi
+
+          mv /tmp/contributor-valid-state.json data/evidence-state.json
+          ./evidence status --raw /tmp/contributor-ebusd.raw
+
+      - name: Fresh contributor checkout remains source-clean
+        working-directory: /tmp/ebus-evidence-contributor
+        run: test -z "$(git status --porcelain)"
+
+
   beginner-flow:
     runs-on: ubuntu-latest
     timeout-minutes: 10
