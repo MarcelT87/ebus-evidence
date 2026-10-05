@@ -14,6 +14,7 @@ from ebus_evidence.context import ContextError, context_metadata_scope, validate
 from ebus_evidence.profiles.loader import ProfileError, validate_profile_data
 from ebus_evidence.provenance import ProvenanceError, bundle_provenance
 from ebus_evidence.state import load_state, profile_fingerprint
+from ebus_evidence.structure import StructureLimitError, validate_structure_limits
 from ebus_evidence.system_identity import (
     SystemIdentityError,
     load_system_document,
@@ -24,8 +25,6 @@ from ebus_evidence.system_identity import (
 _BUNDLE_FORMAT = "ebus-evidence-bundle-v1"
 _SHARED_STATE_FORMAT = "ebus-evidence-shared-state-v1"
 _ZIP_TIME = (1980, 1, 1, 0, 0, 0)
-_MAX_STRUCTURE_DEPTH = 64
-_MAX_STRUCTURE_NODES = 1_000_000
 
 
 class BundleError(ValueError):
@@ -33,32 +32,10 @@ class BundleError(ValueError):
 
 
 def _validate_structure_limits(value: Any, *, label: str) -> None:
-    """Reject pathologically deep, large, or cyclic JSON/YAML-style structures."""
-    stack: list[tuple[Any, int]] = [(value, 0)]
-    seen_containers: set[int] = set()
-    nodes = 0
-    while stack:
-        current, depth = stack.pop()
-        nodes += 1
-        if nodes > _MAX_STRUCTURE_NODES:
-            raise BundleError(
-                f"{label} exceeds maximum structure size of {_MAX_STRUCTURE_NODES} nodes"
-            )
-        if depth > _MAX_STRUCTURE_DEPTH:
-            raise BundleError(
-                f"{label} exceeds maximum nesting depth of {_MAX_STRUCTURE_DEPTH}"
-            )
-        if isinstance(current, (dict, list)):
-            identity = id(current)
-            if identity in seen_containers:
-                raise BundleError(
-                    f"{label} contains repeated or cyclic container references"
-                )
-            seen_containers.add(identity)
-        if isinstance(current, dict):
-            stack.extend((child, depth + 1) for child in current.values())
-        elif isinstance(current, list):
-            stack.extend((child, depth + 1) for child in current)
+    try:
+        validate_structure_limits(value, label=label)
+    except StructureLimitError as exc:
+        raise BundleError(str(exc)) from exc
 
 
 def _canonical_json(data: Any) -> bytes:
