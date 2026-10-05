@@ -5,6 +5,7 @@ import pytest
 from ebus_evidence.system_identity import (
     SystemIdentityError,
     build_system_document,
+    load_system_document,
     parse_scan_result,
     topology_signature,
     validate_system_document,
@@ -122,3 +123,15 @@ def test_system_document_rejects_extra_declared_product_fields():
 
     with pytest.raises(SystemIdentityError, match="unsupported fields"):
         validate_system_document(document)
+
+
+def test_system_identity_rejects_excessively_nested_local_structure(tmp_path):
+    path = tmp_path / "system.json"
+    nested = '{"x":' * 80 + '0' + '}' * 80
+    path.write_text(
+        '{"format":"ebus-evidence-system-v1","deep":' + nested + '}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemIdentityError, match="maximum nesting depth"):
+        load_system_document(path)
