@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ebus-evidence"
-version = "0.1.0rc2.dev0"
+version = "0.1.0rc2"
 description = "Deterministic read-only evidence extraction from ebusd raw logs"
 readme = "README.md"
 license = {file = "LICENSE"}
