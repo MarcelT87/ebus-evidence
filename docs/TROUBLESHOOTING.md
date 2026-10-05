@@ -965,7 +965,10 @@ Examples include:
   `invalid_response_ack`, `unexpected_transaction_direction` or
   `unexpected_transaction_tail` — the remaining ACK/direction framing is
   incomplete or contains bytes the parser cannot validate as one complete
-  transaction.
+  transaction;
+- `truncated_message_record` — ebusd marked the message-mode raw-log record
+  with `...`, meaning the line is an explicitly truncated or continued log
+  fragment and not a complete transaction.
 
 These are counted explicitly as non-frames rather than silently treated as
 valid evidence frames. CRC-invalid, NAK-bearing and incompletely framed
