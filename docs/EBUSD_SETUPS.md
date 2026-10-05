@@ -16,6 +16,29 @@ ebus-evidence
 
 If your existing ebusd installation works and can write a message-mode raw log, you normally do not need to change its adapter configuration for `ebus-evidence`.
 
+## Message mode is not a lossless wire capture
+
+The supported input is ebusd **message-mode** raw logging. It is a useful,
+structured representation of bus transactions, but it is produced after ebusd's
+own echo handling and therefore is not byte-for-byte identical to the physical
+wire.
+
+A real-world cross-installation dataset exposed one current ebusd logger edge
+case: for an ebusd-initiated request whose final on-wire byte is `00`, the
+slave command ACK `00` can be suppressed as an apparent echo. This behaviour
+is tracked upstream as
+[john30/ebusd#1800](https://github.com/john30/ebusd/issues/1800).
+
+`ebus-evidence` handles only the narrow representation that can still be
+proven complete: the request ends on-wire in `00`, the incoming bytes form one
+complete CRC-valid slave response, and ebusd's final outgoing response ACK is
+present and valid. If additional bytes were lost and the response can no longer
+be validated completely, the record remains a non-frame. The parser does not
+guess or reconstruct missing response bytes.
+
+See [Parser and validation status](VALIDATION.md) for the independent dataset
+comparison that validated this behaviour.
+
 ---
 
 ## Supported data sources
