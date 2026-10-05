@@ -971,7 +971,8 @@ Examples include:
   on-wire in `00`, the logger can suppress the real slave ACK `00` as an
   apparent echo. The parser accepts that representation only when the bytes
   that follow form one complete CRC-valid slave response and ebusd's final
-  outgoing response ACK is present and valid;
+  outgoing response ACK is present and valid. The underlying logger behaviour
+  is tracked as [john30/ebusd#1800](https://github.com/john30/ebusd/issues/1800);
 - `truncated_message_record` — ebusd marked the message-mode raw-log record
   with `...`, meaning the line is an explicitly truncated or continued log
   fragment and not a complete transaction.
@@ -982,7 +983,9 @@ transactions never create Evidence events. The logger-omitted ACK exception
 does not synthesize a response or bypass CRC checks; it only recognizes a
 complete transaction whose response and final ACK independently validate.
 Retry-shaped records are currently handled fail-closed rather than being
-reconstructed into a second transaction.
+reconstructed into a second transaction. See
+[Parser and validation status](VALIDATION.md) for the independent full-dataset
+comparison behind these rules.
 
 A small number can occur naturally in real long-running raw logs. A successful
 import should still show `Skipped = 0` unless an actually unsupported/malformed
