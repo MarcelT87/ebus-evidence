@@ -405,3 +405,14 @@ def test_context_scope_rejects_future_profile_version(tmp_path):
 
     with pytest.raises(ContextError, match="newer than active"):
         context_metadata_scope(tmp_path, current_profile)
+
+
+def test_context_scope_rejects_excessively_nested_metadata(tmp_path):
+    nested = '{"x":' * 80 + '0' + '}' * 80
+    (tmp_path / "deep.json").write_text(
+        '{"format":"ebus-evidence-context-v1","deep":' + nested + '}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ContextError, match="maximum nesting depth"):
+        context_metadata_scope(tmp_path, _profile())
