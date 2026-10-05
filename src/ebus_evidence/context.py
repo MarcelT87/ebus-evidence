@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Deque
 
+from ebus_evidence.structure import StructureLimitError, validate_structure_limits
+
 
 _CONTEXT_FORMAT = "ebus-evidence-context-v1"
 _RAW_TS_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
@@ -101,6 +103,18 @@ def context_metadata_scope(
             raise ContextError(
                 f"cannot read context metadata {metadata_path.name}: {exc}"
             ) from exc
+        except RecursionError as exc:
+            raise ContextError(
+                f"cannot read context metadata {metadata_path.name}: "
+                "structure is too deeply nested"
+            ) from exc
+        try:
+            validate_structure_limits(
+                metadata,
+                label=f"context metadata {metadata_path.name}",
+            )
+        except StructureLimitError as exc:
+            raise ContextError(str(exc)) from exc
 
         if (
             not isinstance(metadata, dict)
