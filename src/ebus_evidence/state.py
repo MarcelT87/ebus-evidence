@@ -352,7 +352,7 @@ def _load_state(
     except RecursionError as exc:
         raise StateError("cannot read state: structure is too deeply nested") from exc
     try:
-        validate_structure_limits(data, label="state")
+        validate_structure_limits(data, label="evidence state")
     except StructureLimitError as exc:
         raise StateError(str(exc)) from exc
     if not isinstance(data, dict):
