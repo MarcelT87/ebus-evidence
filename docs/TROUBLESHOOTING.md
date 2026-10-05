@@ -961,8 +961,9 @@ Examples include:
 - `negative_command_ack` / `negative_response_ack` — the transaction
   contains an eBUS NAK. A NAK can trigger a protocol retry, so that record is
   rejected conservatively instead of becoming ordinary Evidence;
-- `missing_command_ack`, `missing_response_ack`, `invalid_command_ack`,
-  `invalid_response_ack`, `unexpected_transaction_direction` or
+- `missing_command_ack`, `missing_response`, `missing_response_ack`,
+  `invalid_command_ack`, `invalid_response_ack`,
+  `unexpected_transaction_direction` or
   `unexpected_transaction_tail` — the remaining ACK/direction framing is
   incomplete or contains bytes the parser cannot validate as one complete
   transaction;
