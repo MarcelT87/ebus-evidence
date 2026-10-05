@@ -30,7 +30,10 @@ you are deliberately investigating the rejection.
 
 ## What the strict gate adds
 
-The ordinary verifier checks the public bundle-v1 structure.
+The ordinary verifier checks the public bundle-v1 structure, including bounded
+JSON/YAML structural complexity. Pathologically deep, oversized or cyclic
+container structures are rejected as controlled validation errors rather than
+being allowed to exhaust recursive processing.
 
 The submission policy additionally rejects normal public contributions with:
 
@@ -56,9 +59,13 @@ It does **not** prove:
 - who created it;
 - that the observations came from the claimed physical installation;
 - that values have the semantic interpretation proposed by the contributor;
-- that the contributor used an official binary.
+- that the contributor used an official binary;
+- that an upstream ebusd message-mode raw log was a lossless byte-for-byte wire
+  capture.
 
-Keep structural acceptance and protocol interpretation separate.
+Keep structural acceptance and protocol interpretation separate. For the
+current raw-parser assurance and known ebusd logging caveat, see
+[Parser and validation status](VALIDATION.md).
 
 ## Never do this
 
