@@ -33,8 +33,9 @@ class BundleError(ValueError):
 
 
 def _validate_structure_limits(value: Any, *, label: str) -> None:
-    """Reject pathologically deep or large JSON/YAML-style structures iteratively."""
+    """Reject pathologically deep, large, or cyclic JSON/YAML-style structures."""
     stack: list[tuple[Any, int]] = [(value, 0)]
+    seen_containers: set[int] = set()
     nodes = 0
     while stack:
         current, depth = stack.pop()
@@ -47,6 +48,13 @@ def _validate_structure_limits(value: Any, *, label: str) -> None:
             raise BundleError(
                 f"{label} exceeds maximum nesting depth of {_MAX_STRUCTURE_DEPTH}"
             )
+        if isinstance(current, (dict, list)):
+            identity = id(current)
+            if identity in seen_containers:
+                raise BundleError(
+                    f"{label} contains repeated or cyclic container references"
+                )
+            seen_containers.add(identity)
         if isinstance(current, dict):
             stack.extend((child, depth + 1) for child in current.values())
         elif isinstance(current, list):
