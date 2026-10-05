@@ -805,3 +805,141 @@ def test_verify_reports_unsupported_zip_compression_as_bundle_error(tmp_path):
 
     with pytest.raises(BundleError, match="cannot read bundle member checksums.json"):
         verify_bundle(output)
+
+
+
+def _repack_bundle_member(source, target, name, data):
+    with zipfile.ZipFile(source) as src:
+        members = {member: src.read(member) for member in src.namelist()}
+    members[name] = data
+    checksums = json.loads(members["checksums.json"])
+    checksums["sha256"][name] = hashlib.sha256(data).hexdigest()
+    members["checksums.json"] = (
+        json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+        for member in sorted(members):
+            dst.writestr(member, members[member])
+
+
+def _shared_state_with_nested_check(state, depth, leaf_json="0"):
+    shallow = {key: value for key, value in state.items() if key != "checks"}
+    prefix = json.dumps(shallow, sort_keys=True)[:-1]
+    nested = '{"x":' * depth + leaf_json + '}' * depth
+    return (prefix + ',"checks":{"rare":' + nested + '}}').encode("utf-8")
+
+
+def test_verify_rejects_excessively_nested_state(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original-depth.zip"
+    invalid = tmp_path / "invalid-depth.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as archive:
+        state = json.loads(archive.read("evidence/state.json"))
+    nested_state = _shared_state_with_nested_check(state, 80)
+    _repack_bundle_member(
+        original,
+        invalid,
+        "evidence/state.json",
+        nested_state,
+    )
+
+    with pytest.raises(BundleError, match="maximum nesting depth"):
+        verify_bundle(invalid)
+
+
+def test_verify_deep_allowed_state_still_finds_forbidden_resume_fields(tmp_path):
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original-forbidden-depth.zip"
+    invalid = tmp_path / "invalid-forbidden-depth.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as archive:
+        state = json.loads(archive.read("evidence/state.json"))
+    nested_state = _shared_state_with_nested_check(
+        state,
+        50,
+        leaf_json='{"device":1}',
+    )
+    _repack_bundle_member(
+        original,
+        invalid,
+        "evidence/state.json",
+        nested_state,
+    )
+
+    with pytest.raises(BundleError, match="forbidden local resume fields: device"):
+        verify_bundle(invalid)
+
+
+def test_verify_wraps_json_recursion_error_as_bundle_error(tmp_path, monkeypatch):
+    import ebus_evidence.bundle as bundle_module
+
+    state_path = tmp_path / "state.json"
+    _write_state(state_path)
+    original = tmp_path / "original-json-recursion.zip"
+    invalid = tmp_path / "invalid-json-recursion.zip"
+    create_bundle(original, PROFILE, state_path=state_path)
+
+    with zipfile.ZipFile(original) as archive:
+        state = json.loads(archive.read("evidence/state.json"))
+    state["checks"]["rare"]["recursion_marker"] = True
+    state_bytes = (json.dumps(state, sort_keys=True) + "\n").encode("utf-8")
+    _repack_bundle_member(
+        original,
+        invalid,
+        "evidence/state.json",
+        state_bytes,
+    )
+
+    real_loads = bundle_module.json.loads
+
+    def loads_with_recursion(value, *args, **kwargs):
+        if isinstance(value, str) and '"recursion_marker": true' in value:
+            raise RecursionError("synthetic deeply nested JSON")
+        return real_loads(value, *args, **kwargs)
+
+    monkeypatch.setattr(bundle_module.json, "loads", loads_with_recursion)
+    with pytest.raises(BundleError, match="structure is too deeply nested"):
+        verify_bundle(invalid)
+
+
+def test_create_bundle_rejects_excessively_nested_local_state(tmp_path):
+    state_path = tmp_path / "state.json"
+    state = _write_state(state_path)
+    nested = 0
+    for _ in range(80):
+        nested = {"x": nested}
+    state["checks"]["rare"]["deep"] = nested
+    state_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BundleError, match="evidence state exceeds maximum nesting depth"):
+        create_bundle(
+            tmp_path / "too-deep.zip",
+            PROFILE,
+            state_path=state_path,
+        )
+
+
+
+def test_create_bundle_rejects_cyclic_profile_structure(tmp_path):
+    profile = {
+        "name": "cyclic-profile",
+        "version": 1,
+        "checks": [
+            {
+                "id": "rare",
+                "match": {"source": "f1", "target": "08", "pbsb": "b509"},
+            }
+        ],
+    }
+    profile["cycle"] = profile
+
+    with pytest.raises(BundleError, match="repeated or cyclic container references"):
+        create_bundle(tmp_path / "cyclic.zip", profile)

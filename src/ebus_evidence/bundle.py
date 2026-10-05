@@ -24,23 +24,60 @@ from ebus_evidence.system_identity import (
 _BUNDLE_FORMAT = "ebus-evidence-bundle-v1"
 _SHARED_STATE_FORMAT = "ebus-evidence-shared-state-v1"
 _ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+_MAX_STRUCTURE_DEPTH = 64
+_MAX_STRUCTURE_NODES = 1_000_000
 
 
 class BundleError(ValueError):
     pass
 
 
+def _validate_structure_limits(value: Any, *, label: str) -> None:
+    """Reject pathologically deep, large, or cyclic JSON/YAML-style structures."""
+    stack: list[tuple[Any, int]] = [(value, 0)]
+    seen_containers: set[int] = set()
+    nodes = 0
+    while stack:
+        current, depth = stack.pop()
+        nodes += 1
+        if nodes > _MAX_STRUCTURE_NODES:
+            raise BundleError(
+                f"{label} exceeds maximum structure size of {_MAX_STRUCTURE_NODES} nodes"
+            )
+        if depth > _MAX_STRUCTURE_DEPTH:
+            raise BundleError(
+                f"{label} exceeds maximum nesting depth of {_MAX_STRUCTURE_DEPTH}"
+            )
+        if isinstance(current, (dict, list)):
+            identity = id(current)
+            if identity in seen_containers:
+                raise BundleError(
+                    f"{label} contains repeated or cyclic container references"
+                )
+            seen_containers.add(identity)
+        if isinstance(current, dict):
+            stack.extend((child, depth + 1) for child in current.values())
+        elif isinstance(current, list):
+            stack.extend((child, depth + 1) for child in current)
+
+
 def _canonical_json(data: Any) -> bytes:
-    return (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    try:
+        return (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    except (RecursionError, ValueError) as exc:
+        raise BundleError(f"cannot serialize JSON structure: {exc}") from exc
 
 
 def _canonical_yaml(data: Any) -> bytes:
-    return yaml.safe_dump(
-        data,
-        sort_keys=True,
-        allow_unicode=True,
-        default_flow_style=False,
-    ).encode("utf-8")
+    try:
+        return yaml.safe_dump(
+            data,
+            sort_keys=True,
+            allow_unicode=True,
+            default_flow_style=False,
+        ).encode("utf-8")
+    except (RecursionError, yaml.YAMLError) as exc:
+        raise BundleError(f"cannot serialize YAML structure: {exc}") from exc
 
 
 def _valid_sha256(value: Any) -> bool:
@@ -231,6 +268,8 @@ def _load_contexts(
         scope = context_metadata_scope(directory, profile)
     except ContextError as exc:
         raise BundleError(str(exc)) from exc
+    except RecursionError as exc:
+        raise BundleError("context metadata structure is too deeply nested") from exc
 
     members: list[tuple[str, bytes]] = []
     for metadata_path in scope.current:
@@ -240,6 +279,14 @@ def _load_contexts(
             raise BundleError(
                 f"cannot read context metadata {metadata_path.name}: {exc}"
             ) from exc
+        except RecursionError as exc:
+            raise BundleError(
+                f"context metadata {metadata_path.name} structure is too deeply nested"
+            ) from exc
+        _validate_structure_limits(
+            metadata,
+            label=f"context metadata {metadata_path.name}",
+        )
 
         try:
             raw_name = _safe_context_raw_name(metadata.get("raw_file"))
@@ -278,6 +325,7 @@ def create_bundle(
     system_path: str | Path | None = None,
     include_context_raw: bool = False,
 ) -> dict[str, Any]:
+    _validate_structure_limits(profile, label="profile")
     if state_path is None and context_dir is None:
         raise BundleError("bundle requires --state, --context-dir, or both")
 
@@ -299,6 +347,9 @@ def create_bundle(
             )
         except (OSError, ValueError) as exc:
             raise BundleError(f"cannot load evidence state: {exc}") from exc
+        except RecursionError as exc:
+            raise BundleError("cannot load evidence state: structure is too deeply nested") from exc
+        _validate_structure_limits(state, label="evidence state")
         state_summary = shared_state(state)
         members.append(("evidence/state.json", _canonical_json(state_summary)))
 
@@ -308,6 +359,9 @@ def create_bundle(
             system_identity = load_system_document(system_path)
         except SystemIdentityError as exc:
             raise BundleError(f"cannot load system identity: {exc}") from exc
+        except RecursionError as exc:
+            raise BundleError("cannot load system identity: structure is too deeply nested") from exc
+        _validate_structure_limits(system_identity, label="system identity")
         members.append(("system.json", _canonical_json(system_identity)))
 
     context_members, historical_context_metadata_count = _load_contexts(
@@ -409,23 +463,31 @@ def _read_member(archive: zipfile.ZipFile, name: str) -> bytes:
 
 def _json_member(archive: zipfile.ZipFile, name: str) -> Any:
     try:
-        return json.loads(_read_member(archive, name).decode("utf-8"))
+        decoded = _read_member(archive, name).decode("utf-8")
     except UnicodeDecodeError as exc:
         raise BundleError(f"invalid UTF-8 in {name}: {exc}") from exc
+    try:
+        value = json.loads(decoded)
     except json.JSONDecodeError as exc:
         raise BundleError(f"invalid JSON in {name}: {exc}") from exc
+    except RecursionError as exc:
+        raise BundleError(f"invalid JSON in {name}: structure is too deeply nested") from exc
+    _validate_structure_limits(value, label=name)
+    return value
 
 
 def _forbidden_keys_present(value: Any, forbidden: set[str]) -> set[str]:
     found: set[str] = set()
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if key in forbidden:
-                found.add(key)
-            found.update(_forbidden_keys_present(child, forbidden))
-    elif isinstance(value, list):
-        for child in value:
-            found.update(_forbidden_keys_present(child, forbidden))
+    stack = [value]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            for key, child in current.items():
+                if key in forbidden:
+                    found.add(key)
+                stack.append(child)
+        elif isinstance(current, list):
+            stack.extend(current)
     return found
 
 
@@ -528,8 +590,14 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
 
         try:
             profile_data = yaml.safe_load(_read_member(archive, "profile.yaml").decode("utf-8"))
+        except (UnicodeDecodeError, yaml.YAMLError) as exc:
+            raise BundleError(f"invalid profile.yaml: {exc}") from exc
+        except RecursionError as exc:
+            raise BundleError("invalid profile.yaml: structure is too deeply nested") from exc
+        _validate_structure_limits(profile_data, label="profile.yaml")
+        try:
             profile = validate_profile_data(profile_data)
-        except (UnicodeDecodeError, yaml.YAMLError, ProfileError) as exc:
+        except ProfileError as exc:
             raise BundleError(f"invalid profile.yaml: {exc}") from exc
 
         if manifest["profile"] != profile["name"]:
