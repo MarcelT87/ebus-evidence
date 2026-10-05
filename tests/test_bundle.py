@@ -925,3 +925,21 @@ def test_create_bundle_rejects_excessively_nested_local_state(tmp_path):
             PROFILE,
             state_path=state_path,
         )
+
+
+
+def test_create_bundle_rejects_cyclic_profile_structure(tmp_path):
+    profile = {
+        "name": "cyclic-profile",
+        "version": 1,
+        "checks": [
+            {
+                "id": "rare",
+                "match": {"source": "f1", "target": "08", "pbsb": "b509"},
+            }
+        ],
+    }
+    profile["cycle"] = profile
+
+    with pytest.raises(BundleError, match="repeated or cyclic container references"):
+        create_bundle(tmp_path / "cyclic.zip", profile)
