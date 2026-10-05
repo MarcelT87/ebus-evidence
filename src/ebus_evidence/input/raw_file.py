@@ -22,6 +22,7 @@ _OVERSIZE_RECORD_MARKER = b"__EBUS_EVIDENCE_OVERSIZED_RAW_RECORD__"
 
 _ACK = 0x00
 _NAK = 0xFF
+_MASTER_ADDRESS_NIBBLES = frozenset((0x0, 0x1, 0x3, 0x7, 0xF))
 
 
 class RawParseError(ValueError):
@@ -135,6 +136,14 @@ def _parse_response(data: bytes, pos: int) -> tuple[str | None, int]:
     return response.hex(), response_end + 1
 
 
+def _is_master_address(address: int) -> bool:
+    """Match ebusd's eBUS master-address classification."""
+    return (
+        (address & 0x0F) in _MASTER_ADDRESS_NIBBLES
+        and ((address & 0xF0) >> 4) in _MASTER_ADDRESS_NIBBLES
+    )
+
+
 def _consume_command_ack(data: bytes, pos: int) -> int:
     """Consume one positive command acknowledgement or fail closed."""
     if pos >= len(data):
@@ -179,11 +188,26 @@ def _consume_response_ack(data: bytes, pos: int) -> int:
     return pos + 1
 
 
-def _parse_passive_transaction(data: bytes, pos: int) -> str | None:
+def _parse_passive_transaction(
+    data: bytes,
+    pos: int,
+    *,
+    expects_response: bool,
+) -> str | None:
     """Validate the post-command bytes of one passive message-mode transaction."""
     pos = _consume_command_ack(data, pos)
     if pos >= len(data):
+        if expects_response:
+            raise RawNonFrame(
+                "missing_response",
+                "slave transaction ended after command ACK without a response",
+            )
         return None
+    if not expects_response:
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "master-target transaction contains bytes after the command acknowledgement",
+        )
 
     response, pos = _parse_response(data, pos)
     pos = _consume_response_ack(data, pos)
@@ -204,7 +228,11 @@ def _decode_direction_segment(value: str, label: str) -> bytes:
         raise RawParseError(str(exc)) from exc
 
 
-def _parse_ebusd_transaction(segments: list[tuple[str, str]]) -> str | None:
+def _parse_ebusd_transaction(
+    segments: list[tuple[str, str]],
+    *,
+    expects_response: bool,
+) -> str | None:
     """Validate direction changes for a transaction initiated by ebusd."""
     if len(segments) == 1:
         raise RawNonFrame(
@@ -228,7 +256,17 @@ def _parse_ebusd_transaction(segments: list[tuple[str, str]]) -> str | None:
                 "unexpected_transaction_tail",
                 "unexpected direction segment after command-only acknowledgement",
             )
+        if expects_response:
+            raise RawNonFrame(
+                "missing_response",
+                "slave transaction ended after command ACK without a response",
+            )
         return None
+    if not expects_response:
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "master-target transaction contains a response after the command acknowledgement",
+        )
 
     response, pos = _parse_response(incoming, pos)
     if pos != len(incoming):
@@ -499,6 +537,7 @@ def parse_record(record: bytes | str) -> Frame:
     request = master[4:request_end].hex()
     response = None
     is_broadcast = master[1] == 0xFE
+    expects_response = not is_broadcast and not _is_master_address(master[1])
 
     if first_direction == "<":
         if len(segments) != 1:
@@ -513,7 +552,11 @@ def parse_record(record: bytes | str) -> Frame:
                     "broadcast transaction contains bytes after the master CRC",
                 )
         else:
-            response = _parse_passive_transaction(master, request_end + 1)
+            response = _parse_passive_transaction(
+                master,
+                request_end + 1,
+                expects_response=expects_response,
+            )
     else:
         if request_end + 1 != len(master):
             raise RawNonFrame(
@@ -527,7 +570,10 @@ def parse_record(record: bytes | str) -> Frame:
                     "broadcast transaction contains acknowledgement/response segments",
                 )
         else:
-            response = _parse_ebusd_transaction(segments)
+            response = _parse_ebusd_transaction(
+                segments,
+                expects_response=expects_response,
+            )
 
     return Frame(
         timestamp=timestamp,
