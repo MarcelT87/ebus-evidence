@@ -96,6 +96,28 @@ def test_parser_crc_checks_ebusd_initiated_response():
 
 
 
+@pytest.mark.parametrize(
+    "record",
+    [
+        b"2026-10-01 10:00:00.000 ...<1008b5070209004f00",
+        b"2026-10-01 10:00:00.000 <1008b5070209004f00...",
+        b"2026-10-01 10:00:00.000 <1008b5070209004f00...>00",
+    ],
+)
+def test_parser_rejects_ebusd_truncated_message_mode_fragments(record):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(record)
+    assert excinfo.value.kind == "truncated_message_record"
+
+
+def test_parser_rejects_unparsed_text_between_segments():
+    with pytest.raises(RawParseError, match="unsupported text"):
+        parse_record(
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834junk<00080201ba0820000000e7>00"
+        )
+
+
 def test_parser_accepts_complete_broadcast_without_ack():
     frame = parse_record(
         b"2026-10-01 10:00:00.000 <10feb5050427a90015a90177"
