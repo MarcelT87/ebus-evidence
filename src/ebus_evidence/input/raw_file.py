@@ -439,10 +439,25 @@ def parse_record(record: bytes | str) -> Frame:
         raise RawParseError("record has no supported timestamp prefix")
     timestamp, body = match.groups()
 
-    segments = _SEGMENT_RE.findall(body)
-    if not segments:
+    if "..." in body:
+        raise RawNonFrame(
+            "truncated_message_record",
+            "ebusd message-mode record is an explicitly truncated/continued fragment",
+        )
+
+    segment_matches = list(_SEGMENT_RE.finditer(body))
+    if not segment_matches:
         raise RawParseError("record contains no eBUS hex segment")
 
+    cursor = 0
+    for segment_match in segment_matches:
+        if segment_match.start() != cursor:
+            raise RawParseError("record contains unsupported text between eBUS segments")
+        cursor = segment_match.end()
+    if cursor != len(body):
+        raise RawParseError("record contains unsupported trailing text")
+
+    segments = [segment_match.groups() for segment_match in segment_matches]
     first_direction, first_hex = segments[0]
     if len(first_hex) % 2:
         raise RawParseError("master segment has an odd number of hex digits")
