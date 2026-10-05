@@ -46,6 +46,73 @@ jobs:
         run: pytest -q
 
 
+  package-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel and source distribution
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'build>=1.2,<2'
+          python -m build
+          test "$(find dist -maxdepth 1 -type f -name '*.whl' | wc -l)" -eq 1
+          test "$(find dist -maxdepth 1 -type f -name '*.tar.gz' | wc -l)" -eq 1
+
+      - name: Install built wheel in a clean environment
+        run: |
+          expected_version="$(python - <<'PY'
+          import tomllib
+          with open("pyproject.toml", "rb") as handle:
+              print(tomllib.load(handle)["project"]["version"])
+          PY
+          )"
+
+          python -m venv /tmp/ebus-evidence-package-smoke
+          /tmp/ebus-evidence-package-smoke/bin/python -m pip install --upgrade pip
+          /tmp/ebus-evidence-package-smoke/bin/python -m pip install dist/*.whl
+
+          cd /tmp
+
+          installed_version="$(
+            /tmp/ebus-evidence-package-smoke/bin/python - <<'PY'
+          from importlib.metadata import version
+          print(version("ebus-evidence"))
+          PY
+          )"
+          test "$installed_version" = "$expected_version"
+
+          runtime_version="$(
+            /tmp/ebus-evidence-package-smoke/bin/ebus-evidence --version
+          )"
+          test "$runtime_version" = "$expected_version"
+
+          /tmp/ebus-evidence-package-smoke/bin/ebus-evidence --help >/dev/null
+
+          /tmp/ebus-evidence-package-smoke/bin/python - <<'PY'
+          from ebus_evidence.profiles.loader import load_profile
+
+          profile = load_profile("hw5103-open-evidence")
+          assert profile["name"] == "hw5103-open-evidence"
+          assert profile["version"] == 2
+          assert {check["id"] for check in profile["checks"]} == {
+              "hmu_a80e_nonzero",
+              "hmu_ba08_variants",
+              "vwzio_3538_variants",
+              "vwzio_b512_states",
+          }
+          PY
+
+
   beginner-flow:
     runs-on: ubuntu-latest
     timeout-minutes: 10
