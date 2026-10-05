@@ -96,7 +96,7 @@ def test_parser_crc_checks_ebusd_initiated_response():
 
 
 @pytest.mark.parametrize(
-    ("command_hex", "request"),
+    ("command_hex", "expected_request"),
     [
         # Logical request CRC 00: the final on-wire symbol is 00.
         ("f115b509010500", "0105"),
@@ -105,14 +105,14 @@ def test_parser_crc_checks_ebusd_initiated_response():
     ],
 )
 def test_parser_recovers_ebusd_logger_omitted_command_ack_when_wire_ends_zero(
-    command_hex, request
+    command_hex, expected_request
 ):
     frame = parse_record(
         f"2026-10-01 10:00:00.000 >{command_hex}<0142d9>00"
     )
     assert frame.initiated_by_ebusd is True
     assert frame.target == "15"
-    assert frame.request == request
+    assert frame.request == expected_request
     assert frame.response == "0142"
 
 
