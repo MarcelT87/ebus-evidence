@@ -1,9 +1,12 @@
 from pathlib import Path
 
+import pytest
+
 from ebus_evidence.input.raw_file import (
     RawNonFrame,
     RawParseError,
     RawRecordSplitter,
+    calculate_ebus_crc,
     parse_record,
     resolve_raw_sources,
     split_records,
@@ -19,7 +22,7 @@ def test_unescape_wire_handles_a9_and_aa():
 
 
 def test_parser_keeps_request_length_byte():
-    frame = parse_record(b"2026-09-23 10:00:00.000 <1008b50702090000")
+    frame = parse_record(b"2026-09-23 10:00:00.000 <1008b5070209004f00")
     assert frame.source == "10"
     assert frame.target == "08"
     assert frame.pbsb == "b507"
@@ -29,10 +32,67 @@ def test_parser_keeps_request_length_byte():
 
 def test_parser_extracts_passive_response():
     frame = parse_record(
-        b"2026-10-01 10:00:00.000 <f108b50905540200a80e0000080201a80e0000b040"
+        b"2026-10-01 10:00:00.000 <f108b50905540200a80ead00080201a80e0000b0407500"
     )
     assert frame.request == "05540200a80e"
     assert frame.response == "080201a80e0000b040"
+
+
+
+def test_ebus_crc_matches_upstream_escaped_symbol_vector():
+    # john30/ebusd expects CRC 0x77 for these logical symbols, including
+    # A9 and AA byte-stuffing cases.
+    assert calculate_ebus_crc(bytes.fromhex("10feb5050427a915aa")) == 0x77
+
+
+def test_parser_rejects_missing_master_crc():
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(b"2026-09-23 10:00:00.000 <1008b507020900")
+    assert excinfo.value.kind == "missing_master_crc"
+
+
+@pytest.mark.parametrize(
+    ("record", "expected", "observed"),
+    [
+        (
+            b"2026-09-05 00:28:23.183 <0376b5120613001000000200bc0210ff0d00",
+            "d6",
+            "00",
+        ),
+        (
+            b"2026-06-24 05:52:47.711 <0376b5120613000c000009ff0000ff5e00",
+            "d9",
+            "ff",
+        ),
+    ],
+)
+def test_parser_rejects_real_issue22_crc_invalid_b512_records(
+    record, expected, observed
+):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(record)
+    assert excinfo.value.kind == "invalid_master_crc"
+    assert f"expected {expected}, observed {observed}" in str(excinfo.value)
+
+
+def test_parser_rejects_invalid_response_crc():
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(
+            b"2026-10-01 10:00:00.000 "
+            b"<0376b5120613000c000006d6000200ff0000"
+        )
+    assert excinfo.value.kind == "invalid_response_crc"
+    assert "expected d3, observed 00" in str(excinfo.value)
+
+
+def test_parser_crc_checks_ebusd_initiated_response():
+    frame = parse_record(
+        b"2026-10-01 10:00:00.000 "
+        b">f108b50905540200ba0834<00080201ba0820000000e7>00"
+    )
+    assert frame.initiated_by_ebusd is True
+    assert frame.request == "05540200ba08"
+    assert frame.response == "080201ba0820000000"
 
 
 def test_split_records_reads_complete_closed_file():
@@ -53,8 +113,8 @@ def test_rotated_source_is_ordered_before_active(tmp_path):
 def test_split_record_buffer_keeps_tail_until_next_record():
     from ebus_evidence.input.raw_file import split_record_buffer
 
-    first = b"2026-10-01 10:00:00.000 <1008b50702090000"
-    second = b"2026-10-01 10:00:01.000 <1008b50702090000"
+    first = b"2026-10-01 10:00:00.000 <1008b5070209004f00"
+    second = b"2026-10-01 10:00:01.000 <1008b5070209004f00"
     records, tail = split_record_buffer(first + b"\n" + second)
 
     assert records == [first]
@@ -102,7 +162,7 @@ def test_incremental_splitter_skips_oversized_record_and_recovers():
         b"2026-10-01 10:00:00.000 <"
         + b"aa" * 100
     )
-    valid = b"2026-10-01 10:00:01.000 <1008b50702090000"
+    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00"
 
     first = splitter.feed(oversized)
     assert len(first) == 1
@@ -123,7 +183,7 @@ def test_split_records_skips_oversized_record_without_large_pending_buffer(tmp_p
         + b"aa" * 100
         + b"\n"
     )
-    valid = b"2026-10-01 10:00:01.000 <1008b50702090000\n"
+    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00\n"
     path.write_bytes(oversized + valid)
 
     records = list(
@@ -154,7 +214,7 @@ def test_incremental_splitter_scans_buffer_a_bounded_number_of_times(monkeypatch
 
     monkeypatch.setattr(raw_file, "_RECORD_START_RE", CountingPattern())
     data = b"".join(
-        b"2026-09-23 10:00:%02d.%03d <1008b50702090000\n" % (i // 1000 % 60, i % 1000)
+        b"2026-09-23 10:00:%02d.%03d <1008b5070209004f00\n" % (i // 1000 % 60, i % 1000)
         for i in range(1000)
     )
 
