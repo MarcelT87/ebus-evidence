@@ -957,10 +957,24 @@ Examples include:
   master CRC or the CRC does not match;
 - `truncated_response` / `missing_response_crc` /
   `invalid_response_crc` — a present response is incomplete or fails its
-  eBUS CRC check.
+  eBUS CRC check;
+- `negative_command_ack` / `negative_response_ack` — the transaction
+  contains an eBUS NAK. A NAK can trigger a protocol retry, so that record is
+  rejected conservatively instead of becoming ordinary Evidence;
+- `missing_command_ack`, `missing_response`, `missing_response_ack`,
+  `invalid_command_ack`, `invalid_response_ack`,
+  `unexpected_transaction_direction` or
+  `unexpected_transaction_tail` — the remaining ACK/direction framing is
+  incomplete or contains bytes the parser cannot validate as one complete
+  transaction;
+- `truncated_message_record` — ebusd marked the message-mode raw-log record
+  with `...`, meaning the line is an explicitly truncated or continued log
+  fragment and not a complete transaction.
 
 These are counted explicitly as non-frames rather than silently treated as
-valid evidence frames. CRC-invalid records never create Evidence events.
+valid evidence frames. CRC-invalid, NAK-bearing and incompletely framed
+transactions never create Evidence events. Retry-shaped records are currently
+handled fail-closed rather than being reconstructed into a second transaction.
 
 A small number can occur naturally in real long-running raw logs. A successful
 import should still show `Skipped = 0` unless an actually unsupported/malformed

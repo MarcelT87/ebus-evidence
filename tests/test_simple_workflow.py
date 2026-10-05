@@ -36,7 +36,7 @@ def test_status_blocks_export_for_invalid_optional_system_file(tmp_path, monkeyp
 
 
 def _record(timestamp: str) -> bytes:
-    return f"{timestamp} <1008b5070209004f00\n".encode("ascii")
+    return f"{timestamp} <1008b5070209004f00000000\n".encode("ascii")
 
 
 def _matching_record(timestamp: str) -> bytes:

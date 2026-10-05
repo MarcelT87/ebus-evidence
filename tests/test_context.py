@@ -16,7 +16,7 @@ from ebus_evidence.profiles.loader import load_profile
 from ebus_evidence.watch import run_watch
 
 
-def _record(timestamp: str, payload: str = "1008b5070209004f00") -> bytes:
+def _record(timestamp: str, payload: str = "1008b5070209004f00000000") -> bytes:
     return f"{timestamp} <{payload}\n".encode("ascii")
 
 

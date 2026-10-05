@@ -22,7 +22,7 @@ def test_unescape_wire_handles_a9_and_aa():
 
 
 def test_parser_keeps_request_length_byte():
-    frame = parse_record(b"2026-09-23 10:00:00.000 <1008b5070209004f00")
+    frame = parse_record(b"2026-09-23 10:00:00.000 <1008b5070209004f00000000")
     assert frame.source == "10"
     assert frame.target == "08"
     assert frame.pbsb == "b507"
@@ -95,6 +95,151 @@ def test_parser_crc_checks_ebusd_initiated_response():
     assert frame.response == "080201ba0820000000"
 
 
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        b"2026-10-01 10:00:00.000 ...<1008b5070209004f00000000",
+        b"2026-10-01 10:00:00.000 <1008b5070209004f00000000...",
+        b"2026-10-01 10:00:00.000 <1008b5070209004f00000000...>00",
+    ],
+)
+def test_parser_rejects_ebusd_truncated_message_mode_fragments(record):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(record)
+    assert excinfo.value.kind == "truncated_message_record"
+
+
+def test_parser_rejects_unparsed_text_between_segments():
+    with pytest.raises(RawParseError, match="unsupported text"):
+        parse_record(
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834junk<00080201ba0820000000e7>00"
+        )
+
+
+def test_parser_accepts_master_target_command_with_ack_only():
+    frame = parse_record(
+        b"2026-10-01 10:00:00.000 <1031b5070209001a00"
+    )
+    assert frame.target == "31"
+    assert frame.request == "020900"
+    assert frame.response is None
+
+
+def test_parser_accepts_complete_broadcast_without_ack():
+    frame = parse_record(
+        b"2026-10-01 10:00:00.000 <10feb5050427a90015a90177"
+    )
+    assert frame.target == "fe"
+    assert frame.request == "0427a915aa"
+    assert frame.response is None
+
+
+@pytest.mark.parametrize(
+    ("record", "kind"),
+    [
+        (
+            b"2026-10-01 10:00:00.000 <1008b5070209004f",
+            "missing_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 <1008b5070209004f00",
+            "missing_response",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 <10feb5050427a90015a9017700",
+            "unexpected_transaction_tail",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 <1008b5070209004fff",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<1008b5070209004fff1008b5070209004f00000000",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<f108b50905540200a80ead00080201a80e0000b04075ff",
+            "negative_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<f108b50905540200a80ead00080201a80e0000b04075",
+            "missing_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b"<f108b50905540200a80ead00080201a80e0000b040750001",
+            "unexpected_transaction_tail",
+        ),
+    ],
+)
+def test_parser_rejects_passive_nak_retry_and_invalid_transaction_tails(
+    record, kind
+):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(record)
+    assert excinfo.value.kind == kind
+
+
+@pytest.mark.parametrize(
+    ("record", "kind"),
+    [
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834",
+            "missing_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834<00",
+            "missing_response",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834>00",
+            "unexpected_transaction_direction",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 >f108b50905540200ba0834<ff",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<ff"
+            b">f108b50905540200ba0834<00080201ba0820000000e7>00",
+            "negative_command_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<00080201ba0820000000e7>ff",
+            "negative_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<00080201ba0820000000e7",
+            "missing_response_ack",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba0834<00080201ba0820000000e7>0001",
+            "unexpected_transaction_tail",
+        ),
+        (
+            b"2026-10-01 10:00:00.000 "
+            b">f108b50905540200ba083400<00080201ba0820000000e7>00",
+            "unexpected_transaction_tail",
+        ),
+    ],
+)
+def test_parser_rejects_ebusd_nak_retry_and_invalid_transaction_tails(
+    record, kind
+):
+    with pytest.raises(RawNonFrame) as excinfo:
+        parse_record(record)
+    assert excinfo.value.kind == kind
+
+
 def test_split_records_reads_complete_closed_file():
     records = list(split_records(FIXTURE, chunk_size=17))
     assert len(records) == 5
@@ -113,8 +258,8 @@ def test_rotated_source_is_ordered_before_active(tmp_path):
 def test_split_record_buffer_keeps_tail_until_next_record():
     from ebus_evidence.input.raw_file import split_record_buffer
 
-    first = b"2026-10-01 10:00:00.000 <1008b5070209004f00"
-    second = b"2026-10-01 10:00:01.000 <1008b5070209004f00"
+    first = b"2026-10-01 10:00:00.000 <1008b5070209004f00000000"
+    second = b"2026-10-01 10:00:01.000 <1008b5070209004f00000000"
     records, tail = split_record_buffer(first + b"\n" + second)
 
     assert records == [first]
@@ -162,7 +307,7 @@ def test_incremental_splitter_skips_oversized_record_and_recovers():
         b"2026-10-01 10:00:00.000 <"
         + b"aa" * 100
     )
-    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00"
+    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00000000"
 
     first = splitter.feed(oversized)
     assert len(first) == 1
@@ -183,7 +328,7 @@ def test_split_records_skips_oversized_record_without_large_pending_buffer(tmp_p
         + b"aa" * 100
         + b"\n"
     )
-    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00\n"
+    valid = b"2026-10-01 10:00:01.000 <1008b5070209004f00000000\n"
     path.write_bytes(oversized + valid)
 
     records = list(
@@ -214,7 +359,7 @@ def test_incremental_splitter_scans_buffer_a_bounded_number_of_times(monkeypatch
 
     monkeypatch.setattr(raw_file, "_RECORD_START_RE", CountingPattern())
     data = b"".join(
-        b"2026-09-23 10:00:%02d.%03d <1008b5070209004f00\n" % (i // 1000 % 60, i % 1000)
+        b"2026-09-23 10:00:%02d.%03d <1008b5070209004f00000000\n" % (i // 1000 % 60, i % 1000)
         for i in range(1000)
     )
 

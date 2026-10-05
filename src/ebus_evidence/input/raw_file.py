@@ -20,6 +20,10 @@ RAW_READ_CHUNK_BYTES = 64 * 1024
 _RECORD_BOUNDARY_OVERLAP_BYTES = 64
 _OVERSIZE_RECORD_MARKER = b"__EBUS_EVIDENCE_OVERSIZED_RAW_RECORD__"
 
+_ACK = 0x00
+_NAK = 0xFF
+_MASTER_ADDRESS_NIBBLES = frozenset((0x0, 0x1, 0x3, 0x7, 0xF))
+
 
 class RawParseError(ValueError):
     pass
@@ -95,10 +99,13 @@ def _validate_crc(payload: bytes, observed: int, *, kind: str, label: str) -> No
         )
 
 
-def _parse_response(data: bytes, pos: int) -> str | None:
-    """Parse and CRC-check one optional response at pos."""
+def _parse_response(data: bytes, pos: int) -> tuple[str | None, int]:
+    """Parse and CRC-check one optional response at pos.
+
+    Return the normalized response and the first unconsumed transaction byte.
+    """
     if pos >= len(data):
-        return None
+        return None, pos
 
     response_length = data[pos]
     if response_length > 32:
@@ -126,7 +133,169 @@ def _parse_response(data: bytes, pos: int) -> str | None:
         kind="invalid_response_crc",
         label="response",
     )
-    return response.hex()
+    return response.hex(), response_end + 1
+
+
+def _is_master_address(address: int) -> bool:
+    """Match ebusd's eBUS master-address classification."""
+    return (
+        (address & 0x0F) in _MASTER_ADDRESS_NIBBLES
+        and ((address & 0xF0) >> 4) in _MASTER_ADDRESS_NIBBLES
+    )
+
+
+def _consume_command_ack(data: bytes, pos: int) -> int:
+    """Consume one positive command acknowledgement or fail closed."""
+    if pos >= len(data):
+        raise RawNonFrame(
+            "missing_command_ack",
+            "transaction is missing the command acknowledgement",
+        )
+
+    value = data[pos]
+    if value == _NAK:
+        raise RawNonFrame(
+            "negative_command_ack",
+            "command was negatively acknowledged (NAK); retry transaction is not evidence",
+        )
+    if value != _ACK:
+        raise RawNonFrame(
+            "invalid_command_ack",
+            f"expected command ACK 00, observed {value:02x}",
+        )
+    return pos + 1
+
+
+def _consume_response_ack(data: bytes, pos: int) -> int:
+    """Consume one positive response acknowledgement or fail closed."""
+    if pos >= len(data):
+        raise RawNonFrame(
+            "missing_response_ack",
+            "transaction is missing the final response acknowledgement",
+        )
+
+    value = data[pos]
+    if value == _NAK:
+        raise RawNonFrame(
+            "negative_response_ack",
+            "response was negatively acknowledged (NAK); retry transaction is not evidence",
+        )
+    if value != _ACK:
+        raise RawNonFrame(
+            "invalid_response_ack",
+            f"expected response ACK 00, observed {value:02x}",
+        )
+    return pos + 1
+
+
+def _parse_passive_transaction(
+    data: bytes,
+    pos: int,
+    *,
+    expects_response: bool,
+) -> str | None:
+    """Validate the post-command bytes of one passive message-mode transaction."""
+    pos = _consume_command_ack(data, pos)
+    if pos >= len(data):
+        if expects_response:
+            raise RawNonFrame(
+                "missing_response",
+                "slave transaction ended after command ACK without a response",
+            )
+        return None
+    if not expects_response:
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "master-target transaction contains bytes after the command acknowledgement",
+        )
+
+    response, pos = _parse_response(data, pos)
+    pos = _consume_response_ack(data, pos)
+    if pos != len(data):
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "unexpected bytes remain after the final response acknowledgement",
+        )
+    return response
+
+
+def _decode_direction_segment(value: str, label: str) -> bytes:
+    if len(value) % 2:
+        raise RawParseError(f"{label} segment has an odd number of hex digits")
+    try:
+        return unescape_wire(bytes.fromhex(value))
+    except ValueError as exc:
+        raise RawParseError(str(exc)) from exc
+
+
+def _parse_ebusd_transaction(
+    segments: list[tuple[str, str]],
+    *,
+    expects_response: bool,
+) -> str | None:
+    """Validate direction changes for a transaction initiated by ebusd."""
+    if len(segments) == 1:
+        raise RawNonFrame(
+            "missing_command_ack",
+            "ebusd-initiated transaction is missing the command acknowledgement",
+        )
+
+    direction, incoming_hex = segments[1]
+    if direction != "<":
+        raise RawNonFrame(
+            "unexpected_transaction_direction",
+            "expected incoming command acknowledgement after ebusd request",
+        )
+
+    incoming = _decode_direction_segment(incoming_hex, "response")
+    pos = _consume_command_ack(incoming, 0)
+
+    if pos >= len(incoming):
+        if len(segments) != 2:
+            raise RawNonFrame(
+                "unexpected_transaction_tail",
+                "unexpected direction segment after command-only acknowledgement",
+            )
+        if expects_response:
+            raise RawNonFrame(
+                "missing_response",
+                "slave transaction ended after command ACK without a response",
+            )
+        return None
+    if not expects_response:
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "master-target transaction contains a response after the command acknowledgement",
+        )
+
+    response, pos = _parse_response(incoming, pos)
+    if pos != len(incoming):
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "unexpected bytes remain in the incoming response segment",
+        )
+
+    if len(segments) < 3:
+        raise RawNonFrame(
+            "missing_response_ack",
+            "ebusd-initiated response is missing the final outgoing acknowledgement",
+        )
+
+    ack_direction, ack_hex = segments[2]
+    if ack_direction != ">":
+        raise RawNonFrame(
+            "unexpected_transaction_direction",
+            "expected outgoing response acknowledgement after incoming response",
+        )
+    ack_data = _decode_direction_segment(ack_hex, "response acknowledgement")
+    ack_end = _consume_response_ack(ack_data, 0)
+    if ack_end != len(ack_data) or len(segments) != 3:
+        raise RawNonFrame(
+            "unexpected_transaction_tail",
+            "unexpected bytes or direction segments remain after the final response acknowledgement",
+        )
+
+    return response
 
 
 def resolve_raw_sources(path: str | Path, include_rotated: bool = False) -> list[Path]:
@@ -308,10 +477,25 @@ def parse_record(record: bytes | str) -> Frame:
         raise RawParseError("record has no supported timestamp prefix")
     timestamp, body = match.groups()
 
-    segments = _SEGMENT_RE.findall(body)
-    if not segments:
+    if "..." in body:
+        raise RawNonFrame(
+            "truncated_message_record",
+            "ebusd message-mode record is an explicitly truncated/continued fragment",
+        )
+
+    segment_matches = list(_SEGMENT_RE.finditer(body))
+    if not segment_matches:
         raise RawParseError("record contains no eBUS hex segment")
 
+    cursor = 0
+    for segment_match in segment_matches:
+        if segment_match.start() != cursor:
+            raise RawParseError("record contains unsupported text between eBUS segments")
+        cursor = segment_match.end()
+    if cursor != len(body):
+        raise RawParseError("record contains unsupported trailing text")
+
+    segments = [segment_match.groups() for segment_match in segment_matches]
     first_direction, first_hex = segments[0]
     if len(first_hex) % 2:
         raise RawParseError("master segment has an odd number of hex digits")
@@ -352,26 +536,44 @@ def parse_record(record: bytes | str) -> Frame:
     pbsb = f"{master[2]:02x}{master[3]:02x}"
     request = master[4:request_end].hex()
     response = None
+    is_broadcast = master[1] == 0xFE
+    expects_response = not is_broadcast and not _is_master_address(master[1])
 
     if first_direction == "<":
-        pos = request_end + 1
-        if pos < len(master) and master[pos] in (0x00, 0xFF):
-            pos += 1
-        response = _parse_response(master, pos)
+        if len(segments) != 1:
+            raise RawNonFrame(
+                "unexpected_transaction_tail",
+                "passive transaction contains additional direction segments",
+            )
+        if is_broadcast:
+            if request_end + 1 != len(master):
+                raise RawNonFrame(
+                    "unexpected_transaction_tail",
+                    "broadcast transaction contains bytes after the master CRC",
+                )
+        else:
+            response = _parse_passive_transaction(
+                master,
+                request_end + 1,
+                expects_response=expects_response,
+            )
     else:
-        incoming = next(
-            (value for direction, value in segments[1:] if direction == "<"),
-            None,
-        )
-        if incoming:
-            if len(incoming) % 2:
-                raise RawParseError("response segment has an odd number of hex digits")
-            try:
-                slave = unescape_wire(bytes.fromhex(incoming))
-            except ValueError as exc:
-                raise RawParseError(str(exc)) from exc
-            pos = 1 if slave and slave[0] in (0x00, 0xFF) else 0
-            response = _parse_response(slave, pos)
+        if request_end + 1 != len(master):
+            raise RawNonFrame(
+                "unexpected_transaction_tail",
+                "ebusd-initiated command segment contains bytes after the master CRC",
+            )
+        if is_broadcast:
+            if len(segments) != 1:
+                raise RawNonFrame(
+                    "unexpected_transaction_tail",
+                    "broadcast transaction contains acknowledgement/response segments",
+                )
+        else:
+            response = _parse_ebusd_transaction(
+                segments,
+                expects_response=expects_response,
+            )
 
     return Frame(
         timestamp=timestamp,
