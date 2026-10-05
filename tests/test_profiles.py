@@ -101,3 +101,33 @@ checks:
 
     with pytest.raises(ProfileError, match="positive integer"):
         load_profile(path)
+
+
+def test_profile_rejects_excessively_nested_local_structure(tmp_path):
+    path = tmp_path / "deep.yaml"
+    nested = '{"x":' * 80 + '0' + '}' * 80
+    path.write_text(
+        '{"name":"deep","version":1,"checks":[{"id":"check","match":{}}],'
+        '"deep":' + nested + '}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ProfileError, match="maximum nesting depth"):
+        load_profile(path)
+
+
+def test_profile_rejects_cyclic_yaml_alias_structure(tmp_path):
+    path = tmp_path / "cyclic.yaml"
+    path.write_text(
+        "name: cyclic\n"
+        "version: 1\n"
+        "checks:\n"
+        "  - id: check\n"
+        "    match: {}\n"
+        "cycle: &cycle\n"
+        "  self: *cycle\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ProfileError, match="repeated or cyclic container references"):
+        load_profile(path)
