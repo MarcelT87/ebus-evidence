@@ -12,7 +12,7 @@ ROOT = Path(__file__).parents[1]
 
 
 def _record(timestamp: str) -> bytes:
-    return f"{timestamp} <1008b5070209004f00\n".encode("ascii")
+    return f"{timestamp} <1008b5070209004f00000000\n".encode("ascii")
 
 
 def test_follower_reads_only_new_records_by_default(tmp_path):
