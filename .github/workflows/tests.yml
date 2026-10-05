@@ -68,6 +68,23 @@ jobs:
           ./evidence --version
           ./evidence --help
 
+      - name: Reinstall reuses a healthy virtualenv
+        run: |
+          bash install.sh | tee /tmp/evidence-reinstall.log
+          grep -F "Using existing virtual environment." /tmp/evidence-reinstall.log
+          ./evidence --version
+
+      - name: Broken recognized virtualenv is recreated without touching data
+        run: |
+          mkdir -p data
+          printf 'keep-me\n' > data/install-preserve-marker
+          rm .venv/bin/python
+          bash install.sh | tee /tmp/evidence-recreate.log
+          grep -F "Recreating the local virtual environment..." /tmp/evidence-recreate.log
+          test -x .venv/bin/python
+          grep -Fx "keep-me" data/install-preserve-marker
+          ./evidence --version
+
       - name: Beginner workflow on synthetic raw log
         run: |
           cp tests/fixtures/sample.raw /tmp/ebusd-evidence-test.raw
@@ -92,6 +109,23 @@ jobs:
           ./evidence export
           ./evidence verify data/evidence.zip
           ./evidence verify --submission data/evidence.zip
+
+      - name: Unknown .venv directory is never deleted automatically
+        run: |
+          rm -rf .venv
+          mkdir .venv
+          printf 'do-not-delete\n' > .venv/KEEP
+          if bash install.sh > /tmp/evidence-unsafe-venv.log 2>&1; then
+            cat /tmp/evidence-unsafe-venv.log
+            echo "installer unexpectedly accepted an unknown .venv directory" >&2
+            exit 1
+          fi
+          cat /tmp/evidence-unsafe-venv.log
+          grep -F "does not look like a Python virtual environment" /tmp/evidence-unsafe-venv.log
+          grep -Fx "do-not-delete" .venv/KEEP
+          rm -rf .venv
+          bash install.sh
+          ./evidence --version
 
       - name: Bootstrap leaves checkout clean
         run: test -z "$(git status --porcelain)"
