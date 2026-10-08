@@ -1,0 +1,55 @@
+name: Feature / improvement
+description: Suggest a documentation, workflow, UX or tool improvement
+title: "Improvement: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for improvements that are not bug reports or Evidence submissions.
+
+        Please do not paste credentials, full raw logs, private host configuration, or other
+        sensitive data. Security vulnerabilities should follow SECURITY.md instead.
+
+  - type: textarea
+    id: improvement
+    attributes:
+      label: What would you improve?
+      description: Describe the proposed change and the problem or friction it would solve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested approach
+      description: Optional. Include example commands or wording if useful.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: ebus-evidence version
+      description: Optional. Include the version if the suggestion relates to current tool behavior.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Documentation
+        - Installation / setup
+        - CLI / workflow
+        - Evidence profile / research workflow
+        - Contribution / GitHub UX
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional non-sensitive details
+      description: Optional context that helps evaluate the improvement.
