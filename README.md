@@ -66,6 +66,29 @@ The installer creates a local `.venv`, installs the checkout and enables the
 local `./evidence` launcher. Runtime data such as `data/evidence-state.json`
 and `data/evidence.zip` are kept relative to that checkout. It does not
 configure or access the eBUS adapter.
+For users who already use [uv](https://docs.astral.sh/uv/), an optional
+checkout-free path is also supported. Pin a release or exact commit and run all
+commands from the same working directory because the normal `data/` files are
+relative to that directory:
+
+```bash
+mkdir ebus-evidence-run
+cd ebus-evidence-run
+
+uvx --from 'git+https://github.com/MarcelT87/ebus-evidence.git@v0.1.0rc2' \
+  ebus-evidence doctor --raw /path/to/ebusd.raw --profile hw5103-open-evidence
+
+uvx --from 'git+https://github.com/MarcelT87/ebus-evidence.git@v0.1.0rc2' \
+  ebus-evidence import --raw /path/to/ebusd.raw --profile hw5103-open-evidence
+
+uvx --from 'git+https://github.com/MarcelT87/ebus-evidence.git@v0.1.0rc2' \
+  ebus-evidence export
+```
+
+This is an optional convenience path, not a replacement for the beginner
+installer. A VCS-installed `uvx` run may report `Source commit: unavailable`
+because the installed package need not retain a Git checkout; runtime and
+profile SHA-256 provenance are still recorded and verified.
 
 ### 2. Check
 
