@@ -1,0 +1,91 @@
+name: vaillant-cross-hardware-experimental
+version: 1
+description: Experimental passive discriminator set for comparing Vaillant heat-pump hardware generations without assigning new semantics.
+
+checks:
+  - id: b507_0209_reference
+    description: B507 /0209XX request reference byte and response variants
+    match:
+      source: "10"
+      target: "08"
+      pbsb: "b507"
+      request_prefix: "0209"
+    value:
+      from: request
+      type: u8
+      offset: 2
+      divisor: 2
+
+  - id: b508_0209_state
+    description: B508 /0209 state byte; cross-hardware polarity/availability comparison
+    match:
+      source: "10"
+      target: "fe"
+      pbsb: "b508"
+      request_prefix: "0209"
+    value:
+      from: request
+      type: u8
+      offset: 2
+
+  - id: b505_025c00_periodic
+    description: B505 /025c00 periodic broadcast structural control; semantics open
+    match:
+      source: "10"
+      target: "fe"
+      pbsb: "b505"
+      request: "025c00"
+
+  - id: b510_020601_periodic
+    description: B510 /020601 periodic broadcast structural control; semantics open
+    match:
+      source: "10"
+      target: "fe"
+      pbsb: "b510"
+      request: "020601"
+
+  - id: b531_hmu_0301
+    description: HMU B531 /0301 raw LPC limit/sentinel payload
+    match:
+      source: "f1"
+      target: "08"
+      pbsb: "b531"
+      request_prefix: "0301"
+    value:
+      from: request
+      type: hex
+      offset: 2
+      length: 2
+
+  - id: b531_vwz_0301
+    description: VWZ B531 /0301 raw LPC limit/sentinel payload
+    match:
+      source: "f1"
+      target: "76"
+      pbsb: "b531"
+      request_prefix: "0301"
+    value:
+      from: request
+      type: hex
+      offset: 2
+      length: 2
+
+  - id: b531_controller_0203
+    description: Controller B531 /0203 Gateway-LPC raw state byte
+    match:
+      source: "f1"
+      target: "15"
+      pbsb: "b531"
+      request_prefix: "0203"
+    value:
+      from: request
+      type: u8
+      offset: 2
+
+  - id: b510_0b0017_companion
+    description: Extended B510 /0b0017 companion frame; exact semantics/name open
+    match:
+      source: "f1"
+      target: "08"
+      pbsb: "b510"
+      request: "0b0017000000000000000000"
