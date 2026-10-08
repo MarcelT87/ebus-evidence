@@ -137,6 +137,47 @@ The final independent Evidence checks included:
   `0aff020000000000030001`;
 - export: `VALID`, `clean`, public submission `PASS`.
 
+## Cross-hardware real-world check
+
+Issue #38 added an independent Vaillant flexoTHERM exclusive installation with
+a different hardware generation:
+
+```text
+08  HMU00  SW0308 / HW0403
+15  VRC 700 (70000)  SW0614 / HW6903
+76  VWZ00  SW0308 / HW0403
+```
+
+A static import over about 6 h 50 min produced:
+
+```text
+Frames observed ...... 15,987
+Passive frames ....... 14,122
+ebusd initiated ....... 1,865
+Non-frames ........... 4,366
+Skipped .............. 0
+```
+
+The normal `hw5103-open-evidence` v2 profile produced zero matches for its
+four current HW5103 research discriminators. That is useful negative
+cross-hardware evidence and supports keeping the bundled v2 profile scoped to
+its current HW5103 research path.
+
+A separate, unmerged experimental profile was then run against the identical
+source window. It reproduced three structural families on the older hardware:
+
+```text
+B507 /0209XX ........ 387
+B505 /025c00 ........ 396
+B510 /020601 ........ 79
+```
+
+while B508 `/0209` and the tested B531/B510 LPC path had zero matches in that
+window. These results are research discriminators, not new public protocol
+semantics, and the experimental profile is not part of the rc2 release.
+
+The returned experimental bundle verified as `VALID`, deterministic and
+public-submission `PASS`, with the privacy-minimized system identity included.
 ## Bundle/verifier robustness
 
 Separate from transport parsing, bundle verification is hardened against

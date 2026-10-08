@@ -9,6 +9,15 @@ Evidence is most useful when it can be tied to a clearly described hardware and 
 
 The product name is not used to guess the bus hardware.
 
+This file is **not** the Evidence state:
+
+- `data/evidence-state.json` contains the collected observation/check state;
+- `data/system.json` contains only the optional privacy-minimized
+  hardware/firmware identity described on this page.
+
+Both may be included in the same exported Evidence bundle, but they serve
+different purposes.
+
 ---
 
 ## Safety boundary

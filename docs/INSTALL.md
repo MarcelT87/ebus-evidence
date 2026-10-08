@@ -171,6 +171,39 @@ If `.venv` is instead an unexpected ordinary directory or a symbolic link,
 the installer stops and asks you to move/remove it manually rather than
 deleting unknown files.
 
+### Optional: run with uvx
+
+If you already use [uv](https://docs.astral.sh/uv/), you can run the packaged
+CLI without creating a repository checkout. Keep all commands in the same
+working directory so the default `data/` state, contexts and bundle remain
+together.
+
+For reproducible Evidence, pin an immutable release or exact commit instead of
+implicitly following the current branch head:
+
+```bash
+mkdir ebus-evidence-run
+cd ebus-evidence-run
+
+uvx --from 'git+https://github.com/MarcelT87/ebus-evidence.git@v0.1.0rc2' \
+  ebus-evidence doctor --raw /path/to/ebusd.raw --profile hw5103-open-evidence
+
+uvx --from 'git+https://github.com/MarcelT87/ebus-evidence.git@v0.1.0rc2' \
+  ebus-evidence import --raw /path/to/ebusd.raw --profile hw5103-open-evidence
+
+uvx --from 'git+https://github.com/MarcelT87/ebus-evidence.git@v0.1.0rc2' \
+  ebus-evidence export
+```
+
+The generated bundle still records and verifies tool-runtime and profile
+SHA-256 provenance. A VCS-installed `uvx` package may show
+`Source commit: unavailable` because the installed environment does not
+necessarily retain Git metadata. This does not by itself make the bundle
+invalid; use the pinned command together with the recorded hashes for
+reproducibility.
+
+`uv` is an additional tool dependency, so the normal clone + `install.sh`
+workflow remains the recommended beginner path.
 ### Advanced/manual installation
 
 The standard Python path remains supported:
