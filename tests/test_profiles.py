@@ -131,3 +131,25 @@ def test_profile_rejects_cyclic_yaml_alias_structure(tmp_path):
 
     with pytest.raises(ProfileError, match="repeated or cyclic container references"):
         load_profile(path)
+
+
+def test_load_cross_hardware_profile_from_explicit_path():
+    profile = load_profile(ROOT / "profiles" / "vaillant-cross-hardware-experimental.yaml")
+    assert profile["name"] == "vaillant-cross-hardware-experimental"
+    assert profile["version"] == 1
+    assert {check["id"] for check in profile["checks"]} == {
+        "b507_0209_reference",
+        "b508_0209_state",
+        "b505_025c00_periodic",
+        "b510_020601_periodic",
+        "b531_hmu_0301",
+        "b531_vwz_0301",
+        "b531_controller_0203",
+        "b510_0b0017_companion",
+    }
+
+
+def test_load_cross_hardware_bundled_profile():
+    profile = load_profile("vaillant-cross-hardware-experimental")
+    assert profile["name"] == "vaillant-cross-hardware-experimental"
+    assert profile["version"] == 1
