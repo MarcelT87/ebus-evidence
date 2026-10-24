@@ -178,6 +178,74 @@ semantics, and the experimental profile is not part of the rc2 release.
 
 The returned experimental bundle verified as `VALID`, deterministic and
 public-submission `PASS`, with the privacy-minimized system identity included.
+
+## Additional HW5103 community capture (preliminary, #42)
+
+On 2026-10-24, [issue #42](https://github.com/MarcelT87/ebus-evidence/issues/42)
+received an independent live-`collect` submission from `rmalbrecht`, described by
+the contributor as a Vaillant aroTHERM plus 55, HW5103, with native Linux/systemd
+ebusd. The ZIP was reviewed as untrusted third-party input; it has **not yet**
+been run through the official trusted
+`./evidence verify --submission evidence.zip` gate. The following is a
+read-only, preliminary inspection, **not** a recorded submission-policy PASS.
+
+The submitted ZIP has four members (`checksums.json`,
+`evidence/state.json`, `manifest.json`, `profile.yaml`). Independent checks
+found matching member SHA-256 hashes, consistent profile/version metadata,
+consistent event and frame subtotals, the expected deterministic ZIP member
+ordering/compression/timestamps, and no extra members. The ZIP SHA-256 is:
+
+```text
+8083122bf91e537233d8d73d64b1444a46079e1336c524b0855928350008854c
+```
+
+The manifest reports `0.1.0rc2`, `hw5103-open-evidence` profile v2, and
+source commit `4f6e60df7a4e19e1c8e27d28c38b65c6a3b4172c` (clean).
+As with any third-party bundle, these provenance values are contributor-supplied
+metadata, not an authentication of the originating installation.
+
+The shared state summarizes approximately 10 h 49 min of observation on
+2026-10-24 (raw log timestamps `07:41:49.472` to `18:30:32.707`, with
+no timezone included in these raw fields):
+
+```text
+Accepted frames ........ 78,540
+Passive frames ......... 73,969
+ebusd-initiated ........  4,571
+Non-frames ............. 20,553
+Skipped records ........     27
+Evidence events ........  4,420
+Continuity resets ......      0
+```
+
+| Bundled profile check | Matches | Observation |
+| --- | ---: | --- |
+| HMU B509 `/a80e` | 252 | all decoded `0.0` |
+| HMU B509 `/ba08` | 105 | all decoded `0` |
+| VWZIO B51A `/3538` | 10 | response `0aff020000000000030001` |
+| VWZIO B512 `/0613` | 4,053 | request state `0` throughout; response `0200ff` |
+
+All four observed response/value sets are consistent with the earlier independent
+HW5103 capture in #22. The lack of B512 states `3`, `5`, and `6` in this
+shorter capture does **not** imply those states are unsupported: their appearance
+is operating-condition/window dependent, and the earlier dataset observed them.
+No new semantic interpretation is inferred.
+
+Review limitations and follow-ups:
+
+- `system.json` is absent. Hardware identity beyond the issue description,
+  including exact device firmware, is not independently established by the ZIP.
+  An existing, privacy-minimized `ebusctl scan` result would improve comparison.
+- `skipped=27` is recorded, but per-record skip reasons are not available in
+  the shared bundle. These should be requested if the collector's summary is
+  already available. `non_frames` are a separate, deliberately excluded class.
+- The bundled v2 checks **do not** test CompressorState `28` or the B507
+  `/0209XX` semantic hypotheses; this submission is not evidence for either.
+- Strict independent verification with the trusted release remains open before
+  claiming `VALID / Public submission PASS` or treating #42 as completed.
+  Do not commit the submitted ZIP or ingest it into other research stores
+  before that gate passes.
+
 ## Bundle/verifier robustness
 
 Separate from transport parsing, bundle verification is hardened against
